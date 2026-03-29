@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Treinar Carlos (IA)</title>
+  <style>
+    body { font-family: Arial; max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .card { background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 8px; }
+    textarea { width: 100%; height: 100px; font-family: monospace; }
+    button { background: #4CAF50; color: white; padding: 10px 20px; border: none; cursor: pointer; }
+    .exemplo { background: #e3f2fd; padding: 10px; margin: 10px 0; border-left: 4px solid #2196F3; }
+  </style>
+</head>
+<body>
+  <h1>🎓 Escola do Carlos (Treinamento da IA)</h1>
+  
+  <div class="card">
+    <h2>1. Prompt do Vendedor (Personalidade)</h2>
+    <p>Edite como Carlos deve se comportar:</p>
+    <textarea id="prompt-vendedor">
+Você é Carlos, consultor técnico sênior...
+    </textarea>
+    <button onclick="salvarPrompt()">Salvar Nova Personalidade</button>
+  </div>
+  
+  <div class="card">
+    <h2>2. Tabela de Preços Dinâmica</h2>
+    <p>Ajuste valores conforme mercado:</p>
+    <table border="1" cellpadding="10">
+      <tr>
+        <th>Serviço</th>
+        <th>Valor Base</th>
+        <th>Variáveis que aumentam</th>
+      </tr>
+      <tr>
+        <td>Ar Condicionado</td>
+        <td><input type="number" id="preco-ar" value="120"></td>
+        <td>BTUs, andar, marca</td>
+      </tr>
+      <tr>
+        <td>Geladeira</td>
+        <td><input type="number" id="preco-gel" value="80"></td>
+        <td>Tipo, marca importada</td>
+      </tr>
+      <tr>
+        <td>Reforma</td>
+        <td><input type="number" id="preco-ref" value="150"></td>
+        <td>Metragem, cômodos, urgência</td>
+      </tr>
+    </table>
+    <button onclick="atualizarPrecos()">Atualizar Preços</button>
+  </div>
+  
+  <div class="card">
+    <h2>3. Exemplos de Conversas (Few-Shot Learning)</h2>
+    <p>Adicione exemplos reais para Carlos aprender:</p>
+    
+    <div class="exemplo">
+      <strong>Cliente:</strong> "Minha geladeira está quente"<br>
+      <strong>Carlos (bom):</strong> "Entendo, isso é urgente para preservar seus alimentos. É frost-free ou convencional? Isso me ajuda a trazer as peças certas."<br>
+      <strong>Carlos (ruim):</strong> "Ok, vou mandar um técnico." ❌
+    </div>
+    
+    <textarea id="novo-exemplo" placeholder="Cole conversa real aqui..."></textarea>
+    <button onclick="adicionarExemplo()">Adicionar ao Treinamento</button>
+  </div>
+  
+  <div class="card">
+    <h2>4. Testar Carlos Agora</h2>
+    <p>Simule uma conversa:</p>
+    <input type="text" id="simular-cliente" placeholder="Digite como se fosse cliente..." style="width: 70%">
+    <button onclick="testarCarlos()">Enviar para Carlos</button>
+    <div id="resposta-carlos" style="margin-top: 20px; padding: 15px; background: white; border: 1px solid #ddd;"></div>
+  </div>
+
+  <script>
+    // Funções seriam conectadas ao backend
+    function salvarPrompt() { alert('Salvo! (conectar ao backend)'); }
+    function atualizarPrecos() { alert('Preços atualizados!'); }
+    function adicionarExemplo() { alert('Exemplo adicionado!'); }
+    function testarCarlos() {
+      const msg = document.getElementById('simular-cliente').value;
+      document.getElementById('resposta-carlos').innerHTML = 
+        '<em>Carlos está pensando...</em><br><br>' +
+        '<strong>Carlos:</strong> Olá! Sou Carlos, consultor técnico. Entendo que você precisa de ajuda. ' +
+        'Para eu trazer a solução exata, consegue me contar um pouco mais sobre o que está acontecendo?';
+    }
+  </script>
+</body>
+</html>
