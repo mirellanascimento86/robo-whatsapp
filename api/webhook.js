@@ -540,3 +540,58 @@ async function gerarTokenJWT() {
 
 // CHAMAR quando confirmar agendamento:
 // await adicionarNaPlanilha(chat.dados);
+
+// ============================================
+// GOOGLE CALENDAR - AGENDAMENTO AUTOMÁTICO
+// ============================================
+
+const GOOGLE_CALENDAR = {
+  ID: process.env.GOOGLE_CALENDAR_ID, // ID da agenda do técnico
+  // ou 'primary' para agenda principal
+};
+
+async function criarEventoCalendario(dados) {
+  try {
+    const token = await gerarTokenJWT(); // mesmo de cima
+    
+    const evento = {
+      summary: `🔧 ${dados.servico} - ${dados.nome}`,
+      location: dados.bairro,
+      description: `Cliente: ${dados.nome}\nTel: ${dados.telefone}\nBTUs: ${dados.btus}\nProblema: ${dados.problema}\nValor visita: R$${dados.valor}`,
+      start: {
+        dateTime: `${dados.data_visita}T${dados.hora_visita}:00-03:00`, // timezone Brasil
+        timeZone: 'America/Sao_Paulo'
+      },
+      end: {
+        dateTime: calcularFim(dados.hora_visita),
+        timeZone: 'America/Sao_Paulo'
+      },
+      reminders: {
+        useDefault: false,
+        overrides: [
+          { method: 'popup', minutes: 30 } // alerta 30min antes
+        ]
+      }
+    };
+    
+    await fetch(`https://www.googleapis.com/calendar/v3/calendars/${GOOGLE_CALENDAR.ID}/events`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(evento)
+    });
+    
+    console.log('✅ Evento criado no Google Calendar');
+    
+  } catch (erro) {
+    console.error('Erro calendar:', erro);
+  }
+}
+
+function calcularFim(horaInicio) {
+  const [h, m] = horaInicio.split(':').map(Number);
+  const fimH = h + 1; // 1 hora de duração
+  return `${fimH.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
+}
