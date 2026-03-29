@@ -422,3 +422,50 @@ async function enviarWhatsApp(telefone, mensagem) {
     console.error('Erro enviar:', e);
   }
 }
+
+// LISTAR CONVERSAS (para o painel)
+app.get('/api/conversas', (req, res) => {
+    // Converter objeto de conversas para array
+    const lista = Object.entries(conversas).map(([tel, chat]) => ({
+        telefone: tel,
+        nome: chat.nome,
+        etapa: chat.etapa,
+        ultima_msg: chat.ultima_msg,
+        esperando: Date.now() - chat.ultima_msg > 60000 // 1 minuto sem resposta
+    }));
+    
+    res.json(lista);
+});
+
+// PAUSAR/RETOMAR ROBÔ
+app.post('/api/pausar', express.json(), (req, res) => {
+    const { telefone, pausar } = req.body;
+    
+    if (pausar) {
+        conversas[telefone].pausado = true;
+        // Enviar msg ao cliente
+        enviarWhatsApp(telefone, 'Você está sendo transferido para um de nossos especialistas. Aguarde...');
+    } else {
+        conversas[telefone].pausado = false;
+    }
+    
+    res.json({ ok: true });
+});
+
+// ENVIAR COMO HUMANO
+app.post('/api/enviar', express.json(), async (req, res) => {
+    const { telefone, mensagem } = req.body;
+    
+    await enviarWhatsApp(telefone, mensagem);
+    
+    // Registrar no histórico
+    if (conversas[telefone]) {
+        conversas[telefone].historico.push({
+            de: 'humano',
+            texto: mensagem,
+            hora: new Date().toLocaleTimeString()
+        });
+    }
+    
+    res.json({ ok: true });
+});
