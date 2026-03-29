@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎛️ Central Conecta</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+        }
+        
+        /* HEADER */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 15px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .status-bar {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4caf50;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* ABAS */
+        .tabs {
+            display: flex;
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 15px;
+            text-align: center;
+            font-size: 12px;
+            color: #888;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+        
+        .tab.ativa {
+            color: #fff;
+            border-bottom-color: #667eea;
+        }
+        
+        .tab .badge {
+            background: #ff4757;
+            color: #fff;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            margin-left: 5px;
+        }
+        
+        /* LISTA DE CONVERSAS */
+        .conversa-card {
+            background: #1a1a1a;
+            margin: 10px;
+            border-radius: 12px;
+            padding: 15px;
+            border-left: 4px solid;
+        }
+        
+        .conversa-card.urgente { border-left-color: #ff4757; }
+        .conversa-card.ativa { border-left-color: #4caf50; }
+        .conversa-card.espera { border-left-color: #ffa502; }
+        
+        .conversa-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .conversa-nome {
+            font-weight: 600;
+            font-size: 16px;
+        }
+        
+        .conversa-tempo {
+            font-size: 11px;
+            color: #888;
+        }
+        
+        .conversa-servico {
+            display: inline-block;
+            background: #333;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 11px;
+            margin-bottom: 10px;
+        }
+        
+        .conversa-preview {
+            color: #aaa;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        
+        .conversa-acoes {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            border: none;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        
+        .btn-assumir {
+            background: #4caf50;
+            color: #fff;
+        }
+        
+        .btn-ver {
+            background: #333;
+            color: #fff;
+        }
+        
+        /* CHAT VIEW */
+        .chat-view {
+            display: none;
+            height: 100vh;
+            flex-direction: column;
+        }
+        
+        .chat-view.ativo {
+            display: flex;
+        }
+        
+        .chat-header {
+            background: #1a1a1a;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .btn-voltar {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 20px;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            background: #0a0a0a;
+        }
+        
+        .msg {
+            max-width: 80%;
+            padding: 12px 15px;
+            border-radius: 18px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .msg-cliente {
+            background: #333;
+            margin-right: auto;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .msg-robo {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .msg-humano {
+            background: #4caf50;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .chat-input-area {
+            background: #1a1a1a;
+            padding: 15px;
+            border-top: 1px solid #333;
+        }
+        
+        .chat-input-container {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .chat-input {
+            flex: 1;
+            background: #333;
+            border: none;
+            border-radius: 25px;
+            padding: 12px 20px;
+            color: #fff;
+            font-size: 14px;
+        }
+        
+        .btn-enviar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: #4caf50;
+            border: none;
+            color: #fff;
+            font-size: 18px;
+        }
+        
+        .acoes-rapidas {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            overflow-x: auto;
+        }
+        
+        .acao-rapida {
+            background: #333;
+            border: none;
+            color: #fff;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            white-space: nowrap;
+        }
+        
+        /* NOTIFICAÇÃO */
+        .notificacao {
+            position: fixed;
+            top: 70px;
+            left: 10px;
+            right: 10px;
+            background: #ff4757;
+            padding: 15px;
+            border-radius: 12px;
+            display: none;
+            z-index: 1000;
+        }
+        
+        .notificacao.ativa {
+            display: block;
+            animation: slideDown 0.3s;
+        }
+        
+        @keyframes slideDown {
+            from { transform: translateY(-100%); }
+            to { transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+    <!-- NOTIFICAÇÃO -->
+    <div class="notificacao" id="notif">
+        <strong>🚨 Maria Silva pediu atendente!</strong><br>
+        <small>Ar condicionado - Copacabana</small>
+    </div>
+    
+    <!-- LISTA VIEW -->
+    <div id="lista-view">
+        <div class="header">
+            <h1>🎛️ Central Conecta</h1>
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="status-dot"></span>
+                    <span>Robô Online</span>
+                </div>
+                <div class="status-item">
+                    <span>5 ativos</span>
+                </div>
+                <div class="status-item">
+                    <span style="color: #ff4757;">2 urgentes</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab ativa" onclick="mostrarAba('todos')">
+                Todos <span class="badge">5</span>
+            </div>
+            <div class="tab" onclick="mostrarAba('urgentes')">
+                Urgentes <span class="badge">2</span>
+            </div>
+            <div class="tab" onclick="mostrarAba('meus')">
+                Meus
+            </div>
+        </div>
+        
+        <!-- CONVERSA 1 - URGENTE -->
+        <div class="conversa-card urgente" onclick="abrirChat('5511999999999')">
+            <div class="conversa-header">
+                <span class="conversa-nome">Maria Silva</span>
+                <span class="conversa-tempo">⏱️ 2 min</span>
+            </div>
+            <span class="conversa-servico">❄️ Ar condicionado</span>
+            <div class="conversa-preview">
+                <strong>Cliente:</strong> "Quero falar com humano"<br>
+                <strong>Bairro:</strong> Copacabana | <strong>BTUs:</strong> 12000
+            </div>
+            <div class="conversa-acoes">
+                <button class="btn btn-assumir" onclick="event.stopPropagation(); assumir('5511999999999')">
+                    👤 ASSUMIR AGORA
+                </button>
+            </div>
+        </div>
+        
+        <!-- CONVERSA 2 - ATIVA -->
+        <div class="conversa-card ativa" onclick="abrirChat('5511988888888')">
+            <div class="conversa-header">
+                <span class="conversa-nome">João Santos</span>
+                <span class="conversa-tempo">🟢 Agora</span>
+            </div>
+            <span class="conversa-servico">🔧 Geladeira</span>
+            <div class="conversa-preview">
+                <strong>Robô:</strong> "Visita R$80, podemos confirmar?"
+            </div>
+            <div class="conversa-acoes">
+                <button class="btn btn-ver">👁️ VER</button>
+            </div>
+        </div>
+        
+        <!-- CONVERSA 3 - ESPERA -->
+        <div class="conversa-card espera">
+            <div class="conversa-header">
+                <span class="conversa-nome">Ana Paula</span>
+                <span class="conversa-tempo">⏳ 5 min</span>
+            </div>
+            <span class="conversa-servico">🏠 Reforma</span>
+            <div class="conversa-preview">
+                Aguardando resposta do cliente...
+            </div>
+        </div>
+    </div>
+    
+    <!-- CHAT VIEW -->
+    <div class="chat-view" id="chat-view">
+        <div class="chat-header">
+            <button class="btn-voltar" onclick="voltarLista()">←</button>
+            <div>
+                <div style="font-weight: 600;">Maria Silva</div>
+                <div style="font-size: 12px; color: #4caf50;">👤 Você está atendendo</div>
+            </div>
+        </div>
+        
+        <div class="chat-messages" id="chat-messages">
+            <div class="msg msg-cliente">
+                Oi, preciso de conserto de ar condicionado
+            </div>
+            <div class="msg msg-robo">
+                Olá, essa é a Central de Atendimento. Para melhor ajudá-lo(a), me informe qual serviço deseja?
+            </div>
+            <div class="msg msg-cliente">
+                Ar condicionado
+            </div>
+            <div class="msg msg-robo">
+                Perfeito! Atendemos toda a Zona Sul do Rio. Para enviar o técnico especializado, preciso saber: Quantos BTUs? Qual marca? Qual bairro? O que está acontecendo?
+            </div>
+            <div class="msg msg-cliente">
+                12000 BTUs Samsung Copacabana não gela
+            </div>
+            <div class="msg msg-robo">
+                ✅ Obrigado pelas informações! Resumo: Ar condicionado 12000 BTUs Samsung Problema: não gela Bairro: Copacabana 💰 Visita técnica: R$140 ⚠️ IMPORTANTE: • Paga no ato da visita • Se aprovar orçamento, R$140 vira crédito • Se não aprovar, diagnóstico por R$140 Podemos agendar? Qual dia e horário?
+            </div>
+            <div class="msg msg-cliente">
+                Tá caro, tem desconto?
+            </div>
+            <div class="msg msg-humano">
+                <div style="font-size: 10px; margin-bottom: 4px;">👤 VOCÊ 14:35</div>
+                Entendo, Maria. Consigo fazer R$120 para hoje à tarde, pois tenho técnico próximo de Copacabana. Topa?
+            </div>
+        </div>
+        
+        <div class="chat-input-area">
+            <div class="chat-input-container">
+                <input type="text" class="chat-input" placeholder="Digite sua mensagem..." id="msg-input">
+                <button class="btn-enviar" onclick="enviarMsg()">➤</button>
+            </div>
+            <div class="acoes-rapidas">
+                <button class="acao-rapida" onclick="msgRapida('Consigo R$120 se for hoje')">💰 Desconto R$120</button>
+                <button class="acao-rapida" onclick="msgRapida('Técnico chega em 1 hora')">⚡ Urgente 1h</button>
+                <button class="acao-rapida" onclick="msgRapida('Amanhã temos vaga')">📅 Amanhã</button>
+                <button class="acao-rapida" onclick="msgRapida('Vou verificar e volto')">⏳ Verificar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Navegação
+        function abrirChat(telefone) {
+            document.getElementById('lista-view').style.display = 'none';
+            document.getElementById('chat-view').classList.add('ativo');
+        }
+        
+        function voltarLista() {
+            document.getElementById('chat-view').classList.remove('ativo');
+            document.getElementById('lista-view').style.display = 'block';
+        }
+        
+        function assumir(telefone) {
+            alert('👤 Você assumiu a conversa! O robô parou de responder.');
+            abrirChat(telefone);
+        }
+        
+        function enviarMsg() {
+            const input = document.getElementById('msg-input');
+            const msg = input.value;
+            if (!msg) return;
+            
+            // Adicionar mensagem visual
+            const chat = document.getElementById('chat-messages');
+            const div = document.createElement('div');
+            div.className = 'msg msg-humano';
+            div.innerHTML = `<div style="font-size: 10px; margin-bottom: 4px;">👤 VOCÊ ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>${msg}`;
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+            
+            input.value = '';
+            
+            // Aqui enviaria para backend
+            // fetch('/api/enviar', {...})
+        }
+        
+        function msgRapida(texto) {
+            document.getElementById('msg-input').value = texto;
+        }
+        
+        function mostrarAba(aba) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('ativa'));
+            event.target.classList.add('ativa');
+        }
+        
+        // Simular notificação
+        setTimeout(() => {
+            document.getElementById('notif').classList.add('ativa');
+            setTimeout(() => {
+                document.getElementById('notif').classList.remove('ativa');
+            }, 5000);
+        }, 3000);
+    </script>
+</body>
+</html>
