@@ -2,53 +2,73 @@
 // CONFIGURAÇÕES
 // ============================================
 const CONFIG = {
-  SUPABASE_URL: process.env.SUPABASE_URL,
-  SUPABASE_KEY: process.env.SUPABASE_KEY,
-  GROQ_KEY: process.env.GROQ_KEY,
   WHATSAPP_TOKEN: process.env.WHATSAPP_TOKEN,
   WHATSAPP_PHONE_ID: process.env.WHATSAPP_PHONE_ID,
   SEU_NUMERO: process.env.SEU_NUMERO
 };
 
-// MEMÓRIA DAS CONVERSAS
+// BANCO DE DADOS EM MEMÓRIA (substituir por Supabase depois)
 const conversas = {};
-const timers = {}; // para follow-up
+const timers = {};
 
 // ============================================
-// PROMPT DA CENTRAL DE ATENDIMENTO
+// RESPOSTAS PRONTAS (PROFISSIONAIS)
 // ============================================
 
-const PROMPT_SISTEMA = `Você é a Central de Atendimento da Conecta Serviços, empresa de consertos residenciais no Rio de Janeiro.
-
-ESTILO DE COMUNICAÇÃO:
-- Profissional, direto, consultivo
-- NUNCA diga seu nome (você é uma central, não uma pessoa)
-- NUNCA use "eu sou Carlos" ou identificação pessoal
-- Sempre "nós", "nossa equipe", "o técnico"
-- Tom de venda: criar urgência, valor, confiança
-
-REGRAS DE PREÇO (ZONA SUL RJ):
-- Ar condicionado: R$140 (visita técnica)
-- Outros serviços: a definir
-
-ESTRUTURA OBRIGATÓRIA:
-1. SAUDAÇÃO: adaptada ao que cliente disse
-2. QUALIFICAÇÃO: BTUs, marca, problema, bairro (para ar)
-3. CONDIÇÃO DE PAGAMENTO: "Visita R$140, paga no ato. Se aprovar orçamento, vira crédito no serviço"
-4. FECHAMENTO: data/hora ou encaminhar técnico
-
-SE CLIENTE MANDAR FOTO/VÍDEO:
-- Agradeça
-- Peça para descrever o problema (foto ajuda mas não substitui diagnóstico)
-- Continue qualificação
-
-SE CLIENTE NÃO RESPONDER EM 1 MINUTO:
-- Envie follow-up criando urgência
-
-OBJEÇÕES COMUNS:
-- "Caro": "Entendo. Só lembrando que inclui diagnóstico completo. Se aprovar, vira crédito."
-- "Quero orçamento antes": "O técnico precisa avaliar no local para orçamento preciso. Por isso a visita."
-- "Vou pensar": "Claro. Só aviso que vagas para esta semana estão acabando."`;
+const RESPOSTAS = {
+  // SAUDAÇÃO
+  saudacao: (nome) => 
+    `Olá${nome ? ' ' + nome : ''}, essa é a Central de Atendimento da Conecta Serviços. Para melhor ajudá-lo(a), me informe qual serviço deseja: conserto de ar condicionado, geladeira, máquina de lavar ou reforma? 🛠️`,
+  
+  // PRIMEIRA PERGUNTA (AR CONDICIONADO)
+  ar_qualificar: () =>
+    `Perfeito! Atendemos toda a Zona Sul do Rio. 📍\n\nPara enviar o técnico especializado, preciso saber:\n• Quantos BTUs?\n• Qual marca?\n• Qual bairro?\n• O que está acontecendo (não gela, não liga, vazamento, barulho)?`,
+  
+  // OUTROS SERVIÇOS (você adiciona depois)
+  geladeira_qualificar: () =>
+    `Entendido! Para geladeira, preciso saber:\n• Frost free ou convencional?\n• Marca?\n• Bairro?\n• Problema (não gela, barulho, vazamento)?`,
+  
+  // APRESENTAR VALOR
+  ar_valor: (btus, marca, bairro, problema) =>
+    `✅ Obrigado pelas informações!\n\n` +
+    `Resumo:\n` +
+    `• Ar condicionado ${btus || ''} BTUs ${marca || ''}\n` +
+    `• Problema: ${problema || 'a diagnosticar'}\n` +
+    `• Bairro: ${bairro || 'Zona Sul'}\n\n` +
+    `💰 Visita técnica: R$140\n\n` +
+    `⚠️ IMPORTANTE:\n` +
+    `• Paga no ato da visita (PIX, dinheiro ou cartão)\n` +
+    `• Se aprovar o orçamento, R$140 vira crédito no serviço\n` +
+    `• Se não aprovar, fica com diagnóstico completo por R$140\n\n` +
+    `Podemos agendar? Qual dia e horário? 📅`,
+  
+  // NEGOCIAÇÃO
+  negociacao: () =>
+    `Entendo que quer avaliar. 💡 Só lembrando:\n\n` +
+    `• Nossos técnicos são especialistas certificados\n` +
+    `• Orçamento sem compromisso (só paga se fizer)\n` +
+    `• Garantia de 90 dias no serviço\n` +
+    `• Vagas para esta semana estão acabando\n\n` +
+    `Consigo segurar uma vaga para amanhã ou depois. Topa?`,
+  
+  // CONFIRMAÇÃO
+  confirmacao: (data, hora) =>
+    `🎉 *AGENDAMENTO CONFIRMADO!*\n\n` +
+    `📅 ${data} às ${hora}\n` +
+    `💰 R$140 (visita técnica)\n\n` +
+    `O técnico entrará em contato 30 min antes. Obrigado pela confiança! 🛠️`,
+  
+  // FOLLOW-UP (1 minuto)
+  followup1: () =>
+    `Ainda está por aí? Preciso confirmar os dados para reservar sua vaga. As vagas para Zona Sul estão acabando esta semana. 🏃‍♂️`,
+  
+  followup2: () =>
+    `Não quero que fique sem atendimento. Posso agendar agora ou prefere que um especialista te ligue? 📞`,
+  
+  // HUMANO
+  humano: () =>
+    `Vou transferir para um atendente especialista. Aguarde um momento... ⏳`
+};
 
 // ============================================
 // FUNÇÃO PRINCIPAL
@@ -56,6 +76,7 @@ OBJEÇÕES COMUNS:
 
 export default async function handler(req, res) {
   
+  // Verificação Facebook
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -79,34 +100,30 @@ export default async function handler(req, res) {
       const telefone = message.from;
       const nome = value.contacts?.[0]?.profile?.name || '';
       
+      // Ignorar eco
       if (telefone === CONFIG.WHATSAPP_PHONE_ID) return res.status(200).send('OK');
       
-      // Processar mensagem
-      let entrada = {
-        tipo: message.type,
-        texto: '',
-        midia_descricao: ''
-      };
+      // Extrair texto
+      let texto = '';
+      let tipo = message.type;
       
-      if (message.type === 'text') {
-        entrada.texto = message.text.body;
-      } else if (message.type === 'image') {
-        entrada.texto = '[imagem recebida]';
-        entrada.midia_descricao = 'Cliente enviou foto do equipamento/problema';
-      } else if (message.type === 'video') {
-        entrada.texto = '[vídeo recebido]';
-        entrada.midia_descricao = 'Cliente enviou vídeo mostrando o problema';
-      } else if (message.type === 'audio') {
-        entrada.texto = '[áudio recebido]';
-        entrada.midia_descricao = 'Cliente enviou áudio descrevendo';
+      if (tipo === 'text') {
+        texto = message.text.body;
+      } else if (tipo === 'image') {
+        texto = '[imagem]';
+      } else if (tipo === 'video') {
+        texto = '[vídeo]';
+      } else if (tipo === 'audio') {
+        texto = '[áudio]';
       }
+      
+      console.log(`${new Date().toLocaleTimeString()} | ${telefone}: ${texto.substring(0, 40)}`);
       
       // Buscar ou criar conversa
       if (!conversas[telefone]) {
         conversas[telefone] = {
           nome: nome,
           etapa: 'inicio',
-          historico: [],
           dados: {},
           ultima_msg: Date.now()
         };
@@ -115,199 +132,263 @@ export default async function handler(req, res) {
       const chat = conversas[telefone];
       chat.ultima_msg = Date.now();
       
-      // Adicionar ao histórico
-      chat.historico.push({
-        role: 'user',
-        content: entrada.texto,
-        timestamp: new Date().toISOString()
-      });
+      // Limpar timer anterior
+      if (timers[telefone]) clearTimeout(timers[telefone]);
       
-      // Montar contexto para IA
-      const contexto = montarContexto(chat, nome, entrada);
+      let resposta = '';
       
-      // Chamar IA Groq
-      const respostaIA = await chamarGroq(contexto);
+      // ==========================================
+      // LÓGICA DO ATENDIMENTO (PASSO A PASSO)
+      // ==========================================
       
-      // Adicionar resposta ao histórico
-      chat.historico.push({
-        role: 'assistant',
-        content: respostaIA,
-        timestamp: new Date().toISOString()
-      });
+      const t = texto.toLowerCase();
       
-      // Extrair dados da resposta
-      const dadosExtraidos = extrairDados(entrada.texto, respostaIA);
-      chat.dados = { ...chat.dados, ...dadosExtraidos };
+      // DETECTAR SE PEDIU HUMANO (em qualquer etapa)
+      if (t.includes('humano') || t.includes('atendente') || t.includes('pessoa') || t.includes('ligar')) {
+        resposta = RESPOSTAS.humano();
+        await enviarWhatsApp(telefone, resposta);
+        await enviarWhatsApp(CONFIG.SEU_NUMERO, `🚨 ${nome || 'Cliente'} pediu humano: ${telefone}`);
+        return res.status(200).send('OK');
+      }
       
-      // Atualizar etapa
-      chat.etapa = determinarEtapa(chat.etapa, chat.dados);
+      // ETAPA 1: INÍCIO
+      if (chat.etapa === 'inicio') {
+        // Detectar se já disse o serviço
+        const servico = detectarServico(t);
+        
+        if (servico) {
+          chat.dados.servico = servico;
+          chat.etapa = 'qualificando';
+          
+          if (servico === 'ar_condicionado') {
+            resposta = RESPOSTAS.ar_qualificar();
+          } else if (servico === 'geladeira') {
+            resposta = RESPOSTAS.geladeira_qualificar();
+          } else {
+            resposta = `Entendido! Para ${servico}, preciso de mais detalhes. Qual bairro e qual o problema?`;
+          }
+        } else {
+          // Saudação padrão
+          resposta = RESPOSTAS.saudacao(nome);
+        }
+      }
+      
+      // ETAPA 2: QUALIFICANDO (AR CONDICIONADO)
+      else if (chat.etapa === 'qualificando' && chat.dados.servico === 'ar_condicionado') {
+        // Extrair dados da mensagem
+        const novosDados = extrairDadosAr(texto);
+        chat.dados = { ...chat.dados, ...novosDados };
+        
+        const d = chat.dados;
+        
+        // Se tem todos os dados obrigatórios
+        if (d.btus && d.marca && d.bairro && d.problema) {
+          chat.etapa = 'apresentando_valor';
+          resposta = RESPOSTAS.ar_valor(d.btus, d.marca, d.bairro, d.problema);
+        }
+        // Se tem alguns dados, pedir os faltantes
+        else {
+          const faltando = [];
+          if (!d.btus) faltando.push('BTUs');
+          if (!d.marca) faltando.push('marca');
+          if (!d.bairro) faltando.push('bairro');
+          if (!d.problema) faltando.push('o problema');
+          
+          resposta = `Anotei ${Object.keys(novosDados).join(', ') || 'alguns dados'}. Ainda preciso: ${faltando.join(', ')}.`;
+        }
+      }
+      
+      // ETAPA 3: APRESENTANDO VALOR
+      else if (chat.etapa === 'apresentando_valor') {
+        if (t.includes('sim') || t.includes('ok') || t.includes('pode') || t.includes('agenda')) {
+          chat.etapa = 'agendando';
+          resposta = `Perfeito! 📅 Qual dia e horário? (ex: "amanhã às 14h" ou "segunda de manhã")`;
+        }
+        else if (t.includes('caro') || t.includes('desconto') || t.includes('negocia')) {
+          resposta = RESPOSTAS.negociacao();
+        }
+        else {
+          resposta = `Sem problema. Posso:\n• Explicar melhor a garantia\n• Ver outro horário\n• Passar para atendente\n\nO que prefere?`;
+        }
+      }
+      
+      // ETAPA 4: AGENDANDO
+      else if (chat.etapa === 'agendando') {
+        const data = detectarData(texto);
+        const hora = detectarHora(texto);
+        
+        if (data && hora) {
+          chat.etapa = 'confirmado';
+          chat.dados.data = data;
+          chat.dados.hora = hora;
+          
+          resposta = RESPOSTAS.confirmacao(formatarData(data), hora);
+          
+          // ALERTAR TÉCNICO E VOCÊ
+          await alertarSistema(telefone, chat);
+        }
+        else if (data) {
+          resposta = `Data: ${formatarData(data)}. E o horário? (manhã/tarde/noite ou hora específica)`;
+        }
+        else {
+          resposta = `Não entendi. Pode dizer:\n• "Amanhã às 14h"\n• "Segunda de manhã"\n• "25/03 às 15h30"`;
+        }
+      }
+      
+      // ETAPA 5: CONFIRMADO
+      else if (chat.etapa === 'confirmado') {
+        resposta = `Seu agendamento está confirmado! O técnico entrará em contato 30 min antes. Qualquer dúvida, estamos aqui. ✅`;
+      }
+      
+      // Fallback (não deveria acontecer)
+      if (!resposta) {
+        resposta = `Entendi. Para agilizar, preciso saber: qual serviço, qual bairro na Zona Sul, e qual o problema? 🛠️`;
+      }
       
       // Enviar resposta
-      await enviarWhatsApp(telefone, respostaIA);
+      await enviarWhatsApp(telefone, resposta);
+      console.log(`Resposta: ${resposta.substring(0, 50)}...`);
       
-      // Agendar follow-up em 1 minuto
-      if (timers[telefone]) clearTimeout(timers[telefone]);
+      // Agendar follow-up
       timers[telefone] = setTimeout(() => {
         enviarFollowUp(telefone, chat);
       }, 60000); // 1 minuto
       
-      // Se tem todos os dados, alertar técnico
-      if (chat.etapa === 'pronto_enviar' && !chat.tecnico_alertado) {
-        await alertarTecnico(telefone, chat);
-        chat.tecnico_alertado = true;
-      }
-      
       return res.status(200).send('OK');
       
     } catch (erro) {
-      console.error('Erro:', erro);
-      return res.status(500).send('Erro');
+      console.error('ERRO CRÍTICO:', erro);
+      // Mesmo com erro, tenta enviar algo
+      try {
+        await enviarWhatsApp(message?.from, 'Tivemos um problema técnico. Um atendente vai te ajudar em instantes.');
+      } catch(e) {}
+      return res.status(200).send('OK');
     }
   }
 }
 
 // ============================================
-// FUNÇÕES DE CONTEXTO E IA
+// FUNÇÕES AUXILIARES
 // ============================================
 
-function montarContexto(chat, nome, entrada) {
-  let contexto = '';
-  
-  // Saudação adaptada
-  if (chat.etapa === 'inicio' && chat.historico.length === 0) {
-    contexto += `PRIMEIRA MENSAGEM DO CLIENTE: "${entrada.texto}"\n\n`;
-    contexto += `INSTRUÇÃO: Se cliente disse apenas "oi", "olá", etc, responda EXATAMENTE:\n`;
-    contexto += `"Olá, essa é a Central de Atendimento. Para melhor ajudá-lo(a), me informe qual serviço deseja?"\n\n`;
-    contexto += `Se cliente já disse o serviço (ar, geladeira, etc), pule saudação e vá direto para qualificação.\n\n`;
-  }
-  
-  contexto += `HISTÓRICO DA CONVERSA:\n`;
-  chat.historico.slice(-6).forEach((msg, i) => {
-    contexto += `${msg.role === 'user' ? 'Cliente' : 'Central'}: ${msg.content}\n`;
-  });
-  
-  contexto += `\nDADOS JÁ COLETADOS: ${JSON.stringify(chat.dados)}\n`;
-  contexto += `ETAPA ATUAL: ${chat.etapa}\n`;
-  
-  if (entrada.midia_descricao) {
-    contexto += `\nMÍDIA RECEBIDA: ${entrada.midia_descricao}\n`;
-  }
-  
-  contexto += `\nINSTRUÇÃO FINAL: Responda como Central de Atendimento. Não se identifique. Seja vendedor.`;
-  
-  return contexto;
+function detectarServico(texto) {
+  if (texto.includes('ar') || texto.includes('condicionado') || texto.includes('split')) return 'ar_condicionado';
+  if (texto.includes('geladeira')) return 'geladeira';
+  if (texto.includes('máquina') || texto.includes('lavar')) return 'maquina_lavar';
+  if (texto.includes('reforma')) return 'reforma';
+  return null;
 }
 
-async function chamarGroq(contexto) {
-  try {
-    const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${CONFIG.GROQ_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'llama3-70b-8192',
-        messages: [
-          { role: 'system', content: PROMPT_SISTEMA },
-          { role: 'user', content: contexto }
-        ],
-        temperature: 0.8,
-        max_tokens: 400
-      })
-    });
-    
-    const dados = await resposta.json();
-    return dados.choices?.[0]?.message?.content || 'Desculpe, tivemos um problema. Um atendente vai te ajudar.';
-    
-  } catch (erro) {
-    console.error('Erro Groq:', erro);
-    return 'Desculpe, estamos com instabilidade. Pode repetir?';
-  }
-}
-
-// ============================================
-// FUNÇÕES DE PROCESSAMENTO
-// ============================================
-
-function extrairDados(textoCliente, respostaIA) {
-  const t = textoCliente.toLowerCase();
+function extrairDadosAr(texto) {
+  const t = texto.toLowerCase();
   const dados = {};
   
-  // Detectar serviço
-  if (t.includes('ar') || t.includes('condicionado') || t.includes('split')) {
-    dados.servico = 'ar_condicionado';
-    dados.valor_visita = 140;
-  } else if (t.includes('geladeira')) {
-    dados.servico = 'geladeira';
-  } else if (t.includes('máquina') || t.includes('lavar')) {
-    dados.servico = 'maquina_lavar';
-  } else if (t.includes('reforma')) {
-    dados.servico = 'reforma';
-  }
-  
-  // Extrair BTUs
-  const btusMatch = t.match(/(\d+)\s*(btus?|btu)/);
+  // BTUs
+  const btusMatch = t.match(/(\d{3,5})\s*(btus?|btu)/);
   if (btusMatch) dados.btus = btusMatch[1];
   
-  // Extrair marca
-  const marcas = ['samsung', 'lg', 'electrolux', 'consul', 'brastemp', 'panasonic', 'fujitsu', 'gree', 'carrier'];
-  for (const marca of marcas) {
-    if (t.includes(marca)) dados.marca = marca;
+  // Marca
+  const marcas = ['samsung', 'lg', 'electrolux', 'consul', 'brastemp', 'panasonic', 'fujitsu', 'gree', 'carrier', 'elgin', 'philco'];
+  for (const m of marcas) {
+    if (t.includes(m)) dados.marca = m.toUpperCase();
   }
   
-  // Extrair bairro (Zona Sul RJ)
-  const bairrosZS = ['copacabana', 'ipanema', 'leblon', 'botafogo', 'flamengo', 'laranjeiras', 'cosme velho', 'jardim botânico', 'gávea', 'são conrado', 'vidigal', 'rocinha', 'humaitá', 'urca'];
-  for (const bairro of bairrosZS) {
-    if (t.includes(bairro)) dados.bairro = bairro;
+  // Bairro Zona Sul RJ
+  const bairros = ['copacabana', 'ipanema', 'leblon', 'botafogo', 'flamengo', 'laranjeiras', 'cosme velho', 'jardim botanico', 'jardim botânico', 'gavea', 'gávea', 'sao conrado', 'são conrado', 'vidigal', 'humaita', 'humaitá', 'urca'];
+  for (const b of bairros) {
+    if (t.includes(b)) dados.bairro = b.charAt(0).toUpperCase() + b.slice(1);
   }
   
-  // Extrair problema
-  if (t.includes('não liga') || t.includes('nao liga')) dados.problema = 'nao_liga';
-  if (t.includes('não gela') || t.includes('nao gela')) dados.problema = 'nao_gela';
-  if (t.includes('vazamento') || t.includes('pingando')) dados.problema = 'vazamento';
-  if (t.includes('barulho') || t.includes('ruido')) dados.problema = 'barulho';
+  // Problema
+  if (t.includes('nao gela') || t.includes('não gela') || t.includes('quente')) dados.problema = 'não gela';
+  else if (t.includes('nao liga') || t.includes('não liga') || t.includes('desligado')) dados.problema = 'não liga';
+  else if (t.includes('vazamento') || t.includes('pingando') || t.includes('agua')) dados.problema = 'vazamento';
+  else if (t.includes('barulho') || t.includes('ruido') || t.includes('estranho')) dados.problema = 'barulho';
   
   return dados;
 }
 
-function determinarEtapa(etapaAtual, dados) {
-  if (etapaAtual === 'inicio' && dados.servico) return 'qualificando';
-  if (etapaAtual === 'qualificando' && dados.servico === 'ar_condicionado') {
-    if (dados.btus && dados.marca && dados.bairro && dados.problema) return 'apresentando_valor';
+function detectarData(texto) {
+  const hoje = new Date();
+  const t = texto.toLowerCase();
+  
+  if (t.includes('hoje')) return hoje.toISOString().split('T')[0];
+  
+  if (t.includes('amanhã') || t.includes('amanha')) {
+    const amanha = new Date(hoje);
+    amanha.setDate(amanha.getDate() + 1);
+    return amanha.toISOString().split('T')[0];
   }
-  if (etapaAtual === 'apresentando_valor') return 'negociando';
-  if (etapaAtual === 'negociando') return 'pronto_enviar';
-  return etapaAtual;
+  
+  // Dias da semana
+  const dias = {
+    'domingo': 0, 'segunda': 1, 'terça': 2, 'terca': 2, 'quarta': 3, 
+    'quinta': 4, 'sexta': 5, 'sábado': 6, 'sabado': 6
+  };
+  
+  for (const [dia, num] of Object.entries(dias)) {
+    if (t.includes(dia)) {
+      const hojeNum = hoje.getDay();
+      let add = num - hojeNum;
+      if (add <= 0) add += 7;
+      const data = new Date(hoje);
+      data.setDate(data.getDate() + add);
+      return data.toISOString().split('T')[0];
+    }
+  }
+  
+  // DD/MM ou DD-MM
+  const match = texto.match(/(\d{1,2})[\/\-](\d{1,2})/);
+  if (match) {
+    const [, dia, mes] = match;
+    const ano = hoje.getFullYear();
+    return `${ano}-${mes.padStart(2,'0')}-${dia.padStart(2,'0')}`;
+  }
+  
+  return null;
+}
+
+function detectarHora(texto) {
+  const t = texto.toLowerCase();
+  
+  if (t.includes('manhã') || t.includes('manha')) return '09:00';
+  if (t.includes('tarde')) return '14:00';
+  if (t.includes('noite')) return '18:00';
+  
+  const match = texto.match(/(\d{1,2})[h:](\d{2})?/);
+  if (match) {
+    return `${match[1].padStart(2,'0')}:${match[2] || '00'}`;
+  }
+  
+  return null;
+}
+
+function formatarData(dataISO) {
+  const [a, m, d] = dataISO.split('-');
+  return `${d}/${m}`;
 }
 
 async function enviarFollowUp(telefone, chat) {
-  // Só envia se última mensagem foi do cliente (esperando resposta)
-  const ultima = chat.historico[chat.historico.length - 1];
-  if (ultima?.role !== 'user') return;
+  // Só envia se última foi do cliente
+  // Simplificado: sempre envia após 1 minuto de silêncio
   
-  const followUps = [
-    'Ainda está por aí? Preciso confirmar alguns detalhes para garantir a vaga esta semana. 🛠️',
-    'Só lembrando: as vagas para Zona Sul estão acabando. Consegue me responder rapidinho?',
-    'Não quero que fique sem atendimento. Posso agendar agora ou prefere outro dia?'
-  ];
+  const jaEnviados = chat.followups || 0;
   
-  const msg = followUps[Math.min(chat.historico.filter(m => m.role === 'assistant').length, 2)];
+  if (jaEnviados === 0) {
+    await enviarWhatsApp(telefone, RESPOSTAS.followup1());
+    chat.followups = 1;
+  } else if (jaEnviados === 1) {
+    await enviarWhatsApp(telefone, RESPOSTAS.followup2());
+    chat.followups = 2;
+  }
   
-  await enviarWhatsApp(telefone, msg);
-  
-  chat.historico.push({
-    role: 'assistant',
-    content: msg,
-    timestamp: new Date().toISOString(),
-    tipo: 'follow_up'
-  });
+  // Para de enviar após 2 follow-ups
 }
 
-async function alertarTecnico(telefone, chat) {
+async function alertarSistema(telefone, chat) {
   const d = chat.dados;
   
-  const msgTecnico = `🔧 *NOVA OPORTUNIDADE - ZONA SUL*\n\n` +
+  const msg = `🔧 *NOVA OS - ZONA SUL*\n\n` +
     `Cliente: ${chat.nome || 'Não informado'}\n` +
     `Tel: ${telefone}\n` +
     `Serviço: ${d.servico}\n` +
@@ -315,11 +396,11 @@ async function alertarTecnico(telefone, chat) {
     `Marca: ${d.marca || '?'}\n` +
     `Problema: ${d.problema || '?'}\n` +
     `Bairro: ${d.bairro || '?'}\n` +
-    `Valor visita: R$${d.valor_visita || 140}\n\n` +
-    `Responda SIM para aceitar ou NÃO para recusar.`;
+    `Data: ${formatarData(d.data)} ${d.hora}\n` +
+    `Valor: R$140\n\n` +
+    `Responda SIM para aceitar.`;
   
-  // Envia para você (substituir por lista de técnicos depois)
-  await enviarWhatsApp(CONFIG.SEU_NUMERO, msgTecnico);
+  await enviarWhatsApp(CONFIG.SEU_NUMERO, msg);
 }
 
 async function enviarWhatsApp(telefone, mensagem) {
@@ -337,7 +418,6 @@ async function enviarWhatsApp(telefone, mensagem) {
         text: { body: mensagem }
       })
     });
-    console.log(`Enviado para ${telefone}: ${mensagem.substring(0, 50)}...`);
   } catch (e) {
     console.error('Erro enviar:', e);
   }
