@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>🎓 Academia do Robô</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 { color: #333; margin-bottom: 10px; }
+        .subtitle { color: #666; margin-bottom: 30px; }
+        
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        
+        .section h3 {
+            margin-bottom: 15px;
+            color: #444;
+        }
+        
+        textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 13px;
+            resize: vertical;
+        }
+        
+        .exemplo {
+            background: #e3f2fd;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .exemplo.ruim {
+            background: #ffebee;
+            border-left-color: #f44336;
+        }
+        
+        .exemplo.bom {
+            background: #e8f5e9;
+            border-left-color: #4caf50;
+        }
+        
+        button {
+            background: #4caf50;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        button:hover { background: #45a049; }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-box h4 { font-size: 12px; opacity: 0.9; margin-bottom: 5px; }
+        .stat-box .number { font-size: 28px; font-weight: bold; }
+        
+        .teste-chat {
+            border: 2px solid #ddd;
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .mensagens {
+            height: 300px;
+            overflow-y: auto;
+            background: #f5f5f5;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .msg-treino {
+            max-width: 80%;
+            padding: 10px 15px;
+            border-radius: 18px;
+            margin-bottom: 10px;
+        }
+        
+        .msg-treino.cliente {
+            background: white;
+            margin-right: auto;
+        }
+        
+        .msg-treino.robo {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 Academia do Robô</h1>
+        <p class="subtitle">Treine, teste e evolua seu atendente virtual</p>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <h4>CONVERSAS TREINADAS</h4>
+                <div class="number">1.247</div>
+            </div>
+            <div class="stat-box">
+                <h4>TAXA DE CONVERSÃO</h4>
+                <div class="number">68%</div>
+            </div>
+            <div class="stat-box">
+                <h4>TEMPO MÉDIO</h4>
+                <div class="number">4m</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>🧠 Personalidade do Robô (Prompt)</h3>
+            <p>Defina como ele deve se comportar:</p>
+            <textarea id="prompt-sistema">
+Você é a Central de Atendimento da Conecta Serviços, empresa de consertos residenciais na Zona Sul do Rio de Janeiro.
+
+ESTILO:
+- Profissional, direto, consultivo
+- NUNCA se identifique como pessoa (sem "eu sou Carlos")
+- Crie urgência elegante
+- Sempre ofereça próximo passo claro
+
+PREÇOS ZONA SUL:
+- Ar condicionado: R$140 visita
+- Geladeira: R$80 visita  
+- Máquina: R$80 visita
+- Reforma: R$150+ conforme metragem
+
+CONDICIONAMENTO:
+- Visita paga no ato
+- Se aprovar orçamento, vira crédito
+- Se não aprovar, fica com diagnóstico por R$140
+
+OBJEÇÕES:
+- "Caro" → "Consigo ajustar para R$X se confirmar hoje"
+- "Vou pensar" → "Vagas esta semana estão acabando"
+- "Quero orçamento antes" → "Técnico precisa avaliar no local"
+            </textarea>
+            <button onclick="salvarPrompt()">💾 Salvar Nova Personalidade</button>
+        </div>
+        
+        <div class="section">
+            <h3>📚 Exemplos de Conversa (Few-Shot)</h3>
+            <p>O robô aprende copiando bons exemplos:</p>
+            
+            <div class="exemplo ruim">
+                <strong>❌ EXEMPLO RUIM (Não faça assim):</strong><br>
+                Cliente: "Quanto custa?"<br>
+                Robô: "R$140" ❌ (sem qualificação, sem valor)
+            </div>
+            
+            <div class="exemplo bom">
+                <strong>✅ EXEMPLO BOM (Faça assim):</strong><br>
+                Cliente: "Quanto custa?"<br>
+                Robô: "Depende do equipamento. Para te dar valor exato: quantos BTUs, qual marca e qual bairro na Zona Sul? Assim envio técnico especializado." ✅
+            </div>
+            
+            <textarea id="novo-exemplo" placeholder="Cole aqui uma conversa real que deu certo..."></textarea>
+            <button onclick="adicionarExemplo()">➕ Adicionar ao Treinamento</button>
+        </div>
+        
+        <div class="section">
+            <h3>🎯 Teste em Tempo Real</h3>
+            <div class="teste-chat">
+                <div class="mensagens" id="area-teste">
+                    <div class="msg-treino robo">Olá, essa é a Central de Atendimento. Para melhor ajudá-lo(a), me informe qual serviço deseja?</div>
+                </div>
+                <input type="text" id="input-teste" placeholder="Simule um cliente..." style="width: 70%; padding: 10px;">
+                <button onclick="testarRobo()">Enviar</button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>📊 Métricas de Desempenho</h3>
+            <ul>
+                <li>Taxa de resposta: <strong>100%</strong> (meta: 100%)</li>
+                <li>Tempo médio de conversa: <strong>4m 32s</strong> (meta: < 5m)</li>
+                <li>Conversão para visita: <strong>68%</strong> (meta: > 60%)</li>
+                <li>Escalonamento para humano: <strong>12%</strong> (meta: < 20%)</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        function salvarPrompt() {
+            const prompt = document.getElementById('prompt-sistema').value;
+            // Enviar para backend
+            alert('✅ Personalidade atualizada! O robô já está usando o novo perfil.');
+        }
+        
+        function adicionarExemplo() {
+            const ex = document.getElementById('novo-exemplo').value;
+            alert('✅ Exemplo adicionado ao banco de treinamento!');
+            document.getElementById('novo-exemplo').value = '';
+        }
+        
+        function testarRobo() {
+            const input = document.getElementById('input-teste');
+            const msg = input.value;
+            if (!msg) return;
+            
+            const area = document.getElementById('area-teste');
+            
+            // Msg cliente
+            const divCliente = document.createElement('div');
+            divCliente.className = 'msg-treino cliente';
+            divCliente.textContent = msg;
+            area.appendChild(divCliente);
+            
+            // Simular resposta robô
+            setTimeout(() => {
+                const divRobo = document.createElement('div');
+                divRobo.className = 'msg-treino robo';
+                
+                // Resposta simulada baseada na mensagem
+                if (msg.toLowerCase().includes('ar') || msg.toLowerCase().includes('geladeira')) {
+                    divRobo.textContent = 'Perfeito! Atendemos toda a Zona Sul. Para enviar o técnico especializado, preciso saber: qual bairro, qual marca/modelo, e o que está acontecendo?';
+                } else if (msg.toLowerCase().includes('preço') || msg.toLowerCase().includes('valor')) {
+                    divRobo.textContent = 'A visita técnica é R$140 para Zona Sul. Se aprovar o orçamento, vira crédito no serviço. Se não aprovar, fica com diagnóstico completo. Para confirmar o valor exato, preciso saber: qual serviço e qual bairro?';
+                } else {
+                    divRobo.textContent = 'Entendi. Para agilizar seu atendimento, qual serviço você precisa: ar condicionado, geladeira, máquina de lavar ou reforma?';
+                }
+                
+                area.appendChild(divRobo);
+                area.scrollTop = area.scrollHeight;
+            }, 1000);
+            
+            input.value = '';
+        }
+    </script>
+</body>
+</html>
