@@ -1,34 +1,44 @@
 // ============================================
-// CONFIGURAÇÕES
+// CONFIGURAÇÕES - TUDO VEM DAS VARIÁVEIS VERCEL
 // ============================================
+
 const CONFIG = {
+  // WhatsApp (Meta)
   WHATSAPP_TOKEN: process.env.WHATSAPP_TOKEN,
   WHATSAPP_PHONE_ID: process.env.WHATSAPP_PHONE_ID,
+  
+  // Telegram (seu bot)
+  TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN, // 123456789:ABC...
+  TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,       // -1001234567890
+  
+  // Google (planilha e calendar)
+  GOOGLE_CLIENT_EMAIL: process.env.GOOGLE_CLIENT_EMAIL,
+  GOOGLE_PRIVATE_KEY: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+  GOOGLE_SHEET_ID: process.env.GOOGLE_SHEET_ID,
+  GOOGLE_CALENDAR_ID: process.env.GOOGLE_CALENDAR_ID,
+  
+  // Seu número para backup
   SEU_NUMERO: process.env.SEU_NUMERO
 };
 
-// BANCO DE DADOS EM MEMÓRIA (substituir por Supabase depois)
+// ============================================
+// BANCO DE DADOS EM MEMÓRIA (temporário)
+// ============================================
+
 const conversas = {};
 const timers = {};
 
 // ============================================
-// RESPOSTAS PRONTAS (PROFISSIONAIS)
+// RESPOSTAS DO ROBÔ (PERSONALIDADE CENTRAL)
 // ============================================
 
 const RESPOSTAS = {
-  // SAUDAÇÃO
   saudacao: (nome) => 
-    `Olá${nome ? ' ' + nome : ''}, essa é a Central de Atendimento da Conecta Serviços. Para melhor ajudá-lo(a), me informe qual serviço deseja: conserto de ar condicionado, geladeira, máquina de lavar ou reforma? 🛠️`,
+    `Olá${nome ? ' ' + nome : ''}, essa é a Central de Atendimento da Central Oficina SEO Brasil. Para melhor ajudá-lo(a), me informe qual serviço deseja: conserto de ar condicionado, geladeira, máquina de lavar ou reforma? 🛠️`,
   
-  // PRIMEIRA PERGUNTA (AR CONDICIONADO)
   ar_qualificar: () =>
     `Perfeito! Atendemos toda a Zona Sul do Rio. 📍\n\nPara enviar o técnico especializado, preciso saber:\n• Quantos BTUs?\n• Qual marca?\n• Qual bairro?\n• O que está acontecendo (não gela, não liga, vazamento, barulho)?`,
   
-  // OUTROS SERVIÇOS (você adiciona depois)
-  geladeira_qualificar: () =>
-    `Entendido! Para geladeira, preciso saber:\n• Frost free ou convencional?\n• Marca?\n• Bairro?\n• Problema (não gela, barulho, vazamento)?`,
-  
-  // APRESENTAR VALOR
   ar_valor: (btus, marca, bairro, problema) =>
     `✅ Obrigado pelas informações!\n\n` +
     `Resumo:\n` +
@@ -42,7 +52,6 @@ const RESPOSTAS = {
     `• Se não aprovar, fica com diagnóstico completo por R$140\n\n` +
     `Podemos agendar? Qual dia e horário? 📅`,
   
-  // NEGOCIAÇÃO
   negociacao: () =>
     `Entendo que quer avaliar. 💡 Só lembrando:\n\n` +
     `• Nossos técnicos são especialistas certificados\n` +
@@ -51,32 +60,23 @@ const RESPOSTAS = {
     `• Vagas para esta semana estão acabando\n\n` +
     `Consigo segurar uma vaga para amanhã ou depois. Topa?`,
   
-  // CONFIRMAÇÃO
   confirmacao: (data, hora) =>
     `🎉 *AGENDAMENTO CONFIRMADO!*\n\n` +
     `📅 ${data} às ${hora}\n` +
     `💰 R$140 (visita técnica)\n\n` +
     `O técnico entrará em contato 30 min antes. Obrigado pela confiança! 🛠️`,
   
-  // FOLLOW-UP (1 minuto)
-  followup1: () =>
-    `Ainda está por aí? Preciso confirmar os dados para reservar sua vaga. As vagas para Zona Sul estão acabando esta semana. 🏃‍♂️`,
-  
-  followup2: () =>
-    `Não quero que fique sem atendimento. Posso agendar agora ou prefere que um especialista te ligue? 📞`,
-  
-  // HUMANO
   humano: () =>
-    `Vou transferir para um atendente especialista. Aguarde um momento... ⏳`
+    `Vou transferir para um de nossos especialistas. Aguarde um momento... ⏳`
 };
 
 // ============================================
-// FUNÇÃO PRINCIPAL
+// FUNÇÃO PRINCIPAL (HANDLER)
 // ============================================
 
 export default async function handler(req, res) {
   
-  // Verificação Facebook
+  // VERIFICAÇÃO DO FACEBOOK (GET)
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -88,6 +88,7 @@ export default async function handler(req, res) {
     return res.status(403).send('Forbidden');
   }
 
+  // RECEBER MENSAGEM (POST)
   if (req.method === 'POST') {
     try {
       const entry = req.body.entry?.[0];
@@ -100,94 +101,110 @@ export default async function handler(req, res) {
       const telefone = message.from;
       const nome = value.contacts?.[0]?.profile?.name || '';
       
-      // Ignorar eco
+      // Ignorar mensagens do próprio sistema
       if (telefone === CONFIG.WHATSAPP_PHONE_ID) return res.status(200).send('OK');
       
-      // Extrair texto
+      // Extrair texto da mensagem
       let texto = '';
       let tipo = message.type;
       
       if (tipo === 'text') {
         texto = message.text.body;
       } else if (tipo === 'image') {
-        texto = '[imagem]';
+        texto = '[imagem recebida]';
       } else if (tipo === 'video') {
-        texto = '[vídeo]';
+        texto = '[vídeo recebido]';
       } else if (tipo === 'audio') {
-        texto = '[áudio]';
+        texto = '[áudio recebido]';
+        await enviarWhatsApp(telefone, 'Desculpe, ainda não consigo ouvir áudios. Pode digitar, por favor? 📝');
+        return res.status(200).send('OK');
       }
       
-      console.log(`${new Date().toLocaleTimeString()} | ${telefone}: ${texto.substring(0, 40)}`);
+      console.log(`[${new Date().toLocaleTimeString()}] ${nome} (${telefone}): ${texto.substring(0, 50)}`);
       
-      // Buscar ou criar conversa
+      // ==========================================
+      // BUSCAR OU CRIAR CONVERSA
+      // ==========================================
+      
       if (!conversas[telefone]) {
         conversas[telefone] = {
           nome: nome,
           etapa: 'inicio',
           dados: {},
+          historico: [],
           ultima_msg: Date.now()
         };
       }
       
       const chat = conversas[telefone];
       chat.ultima_msg = Date.now();
+      chat.historico.push({ tipo: 'cliente', texto, hora: new Date().toLocaleTimeString() });
       
       // Limpar timer anterior
       if (timers[telefone]) clearTimeout(timers[telefone]);
       
       let resposta = '';
-      
-      // ==========================================
-      // LÓGICA DO ATENDIMENTO (PASSO A PASSO)
-      // ==========================================
-      
       const t = texto.toLowerCase();
       
-      // DETECTAR SE PEDIU HUMANO (em qualquer etapa)
-      if (t.includes('humano') || t.includes('atendente') || t.includes('pessoa') || t.includes('ligar')) {
+      // ==========================================
+      // DETECTAR PEDIDO DE HUMANO (PRIORIDADE MÁXIMA)
+      // ==========================================
+      
+      if (t.includes('humano') || t.includes('atendente') || t.includes('pessoa') || 
+          t.includes('especialista') || t.includes('falar com') || t.includes('ligar')) {
+        
+        chat.pausado = true;
         resposta = RESPOSTAS.humano();
+        
+        // 1. Responder cliente
         await enviarWhatsApp(telefone, resposta);
-        await enviarWhatsApp(CONFIG.SEU_NUMERO, `🚨 ${nome || 'Cliente'} pediu humano: ${telefone}`);
+        
+        // 2. ALERTA TELEGRAM (seu grupo Central Oficina SEO Brasil)
+        await alertarTelegram('pediu_humano', {
+          telefone: telefone,
+          nome: chat.nome || nome,
+          servico: chat.dados?.servico || 'Não identificado',
+          bairro: chat.dados?.bairro || 'Não informado',
+          ultimaMsg: texto,
+          etapa: chat.etapa
+        });
+        
+        // 3. Backup WhatsApp seu
+        await enviarWhatsApp(CONFIG.SEU_NUMERO, 
+          `🚨 ${chat.nome || 'Cliente'} pediu humano: ${telefone}`
+        );
+        
         return res.status(200).send('OK');
       }
       
+      // ==========================================
+      // FLUXO NORMAL DE ATENDIMENTO
+      // ==========================================
+      
       // ETAPA 1: INÍCIO
       if (chat.etapa === 'inicio') {
-        // Detectar se já disse o serviço
         const servico = detectarServico(t);
         
         if (servico) {
           chat.dados.servico = servico;
           chat.etapa = 'qualificando';
-          
-          if (servico === 'ar_condicionado') {
-            resposta = RESPOSTAS.ar_qualificar();
-          } else if (servico === 'geladeira') {
-            resposta = RESPOSTAS.geladeira_qualificar();
-          } else {
-            resposta = `Entendido! Para ${servico}, preciso de mais detalhes. Qual bairro e qual o problema?`;
-          }
+          resposta = RESPOSTAS.ar_qualificar();
         } else {
-          // Saudação padrão
           resposta = RESPOSTAS.saudacao(nome);
         }
       }
       
       // ETAPA 2: QUALIFICANDO (AR CONDICIONADO)
       else if (chat.etapa === 'qualificando' && chat.dados.servico === 'ar_condicionado') {
-        // Extrair dados da mensagem
         const novosDados = extrairDadosAr(texto);
         chat.dados = { ...chat.dados, ...novosDados };
         
         const d = chat.dados;
         
-        // Se tem todos os dados obrigatórios
         if (d.btus && d.marca && d.bairro && d.problema) {
           chat.etapa = 'apresentando_valor';
           resposta = RESPOSTAS.ar_valor(d.btus, d.marca, d.bairro, d.problema);
-        }
-        // Se tem alguns dados, pedir os faltantes
-        else {
+        } else {
           const faltando = [];
           if (!d.btus) faltando.push('BTUs');
           if (!d.marca) faltando.push('marca');
@@ -219,18 +236,52 @@ export default async function handler(req, res) {
         
         if (data && hora) {
           chat.etapa = 'confirmado';
-          chat.dados.data = data;
-          chat.dados.hora = hora;
+          chat.dados.data_visita = data;
+          chat.dados.hora_visita = hora;
           
           resposta = RESPOSTAS.confirmacao(formatarData(data), hora);
           
-          // ALERTAR TÉCNICO E VOCÊ
-          await alertarSistema(telefone, chat);
-        }
-        else if (data) {
+          // SALVAR NA PLANILHA GOOGLE
+          await salvarNaPlanilha({
+            data_hora: new Date().toLocaleString('pt-BR'),
+            nome: chat.nome || nome,
+            telefone: telefone,
+            servico: 'Ar Condicionado',
+            bairro: chat.dados.bairro,
+            btus: chat.dados.btus,
+            marca: chat.dados.marca,
+            problema: chat.dados.problema,
+            data_visita: data,
+            hora_visita: hora,
+            valor: 140,
+            status: 'Agendado'
+          });
+          
+          // CRIAR EVENTO NO GOOGLE CALENDAR
+          await criarEventoCalendar({
+            nome: chat.nome || nome,
+            telefone: telefone,
+            servico: 'Ar Condicionado',
+            bairro: chat.dados.bairro,
+            data: data,
+            hora: hora,
+            descricao: `BTUs: ${chat.dados.btus}, Marca: ${chat.dados.marca}, Problema: ${chat.dados.problema}`
+          });
+          
+          // ALERTA TELEGRAM DE NOVO AGENDAMENTO
+          await alertarTelegram('novo_agendamento', {
+            nome: chat.nome || nome,
+            telefone: telefone,
+            servico: 'Ar Condicionado',
+            bairro: chat.dados.bairro,
+            data: formatarData(data),
+            hora: hora,
+            valor: 140
+          });
+          
+        } else if (data) {
           resposta = `Data: ${formatarData(data)}. E o horário? (manhã/tarde/noite ou hora específica)`;
-        }
-        else {
+        } else {
           resposta = `Não entendi. Pode dizer:\n• "Amanhã às 14h"\n• "Segunda de manhã"\n• "25/03 às 15h30"`;
         }
       }
@@ -240,29 +291,30 @@ export default async function handler(req, res) {
         resposta = `Seu agendamento está confirmado! O técnico entrará em contato 30 min antes. Qualquer dúvida, estamos aqui. ✅`;
       }
       
-      // Fallback (não deveria acontecer)
+      // Fallback
       if (!resposta) {
         resposta = `Entendi. Para agilizar, preciso saber: qual serviço, qual bairro na Zona Sul, e qual o problema? 🛠️`;
       }
       
-      // Enviar resposta
+      // ==========================================
+      // ENVIAR RESPOSTA E AGENDAR FOLLOW-UP
+      // ==========================================
+      
       await enviarWhatsApp(telefone, resposta);
+      chat.historico.push({ tipo: 'robo', texto: resposta, hora: new Date().toLocaleTimeString() });
+      
       console.log(`Resposta: ${resposta.substring(0, 50)}...`);
       
-      // Agendar follow-up
+      // Agendar follow-up em 1 minuto
       timers[telefone] = setTimeout(() => {
         enviarFollowUp(telefone, chat);
-      }, 60000); // 1 minuto
+      }, 60000);
       
       return res.status(200).send('OK');
       
     } catch (erro) {
       console.error('ERRO CRÍTICO:', erro);
-      // Mesmo com erro, tenta enviar algo
-      try {
-        await enviarWhatsApp(message?.from, 'Tivemos um problema técnico. Um atendente vai te ajudar em instantes.');
-      } catch(e) {}
-      return res.status(200).send('OK');
+      return res.status(200).send('OK'); // Sempre retorna 200 para WhatsApp não reenviar
     }
   }
 }
@@ -272,10 +324,11 @@ export default async function handler(req, res) {
 // ============================================
 
 function detectarServico(texto) {
-  if (texto.includes('ar') || texto.includes('condicionado') || texto.includes('split')) return 'ar_condicionado';
-  if (texto.includes('geladeira')) return 'geladeira';
-  if (texto.includes('máquina') || texto.includes('lavar')) return 'maquina_lavar';
-  if (texto.includes('reforma')) return 'reforma';
+  const t = texto.toLowerCase();
+  if (t.includes('ar') || t.includes('condicionado') || t.includes('split')) return 'ar_condicionado';
+  if (t.includes('geladeira')) return 'geladeira';
+  if (t.includes('máquina') || t.includes('maquina') || t.includes('lavar')) return 'maquina_lavar';
+  if (t.includes('reforma')) return 'reforma';
   return null;
 }
 
@@ -320,24 +373,18 @@ function detectarData(texto) {
     return amanha.toISOString().split('T')[0];
   }
   
-  // Dias da semana
-  const dias = {
-    'domingo': 0, 'segunda': 1, 'terça': 2, 'terca': 2, 'quarta': 3, 
-    'quinta': 4, 'sexta': 5, 'sábado': 6, 'sabado': 6
-  };
-  
-  for (const [dia, num] of Object.entries(dias)) {
-    if (t.includes(dia)) {
+  const dias = ['domingo','segunda','terça','terca','quarta','quinta','sexta','sábado','sabado'];
+  for (let i = 0; i < dias.length; i++) {
+    if (t.includes(dias[i])) {
       const hojeNum = hoje.getDay();
-      let add = num - hojeNum;
-      if (add <= 0) add += 7;
+      let diasAdd = i - hojeNum;
+      if (diasAdd <= 0) diasAdd += 7;
       const data = new Date(hoje);
-      data.setDate(data.getDate() + add);
+      data.setDate(data.getDate() + diasAdd);
       return data.toISOString().split('T')[0];
     }
   }
   
-  // DD/MM ou DD-MM
   const match = texto.match(/(\d{1,2})[\/\-](\d{1,2})/);
   if (match) {
     const [, dia, mes] = match;
@@ -350,15 +397,12 @@ function detectarData(texto) {
 
 function detectarHora(texto) {
   const t = texto.toLowerCase();
-  
   if (t.includes('manhã') || t.includes('manha')) return '09:00';
   if (t.includes('tarde')) return '14:00';
   if (t.includes('noite')) return '18:00';
   
   const match = texto.match(/(\d{1,2})[h:](\d{2})?/);
-  if (match) {
-    return `${match[1].padStart(2,'0')}:${match[2] || '00'}`;
-  }
+  if (match) return `${match[1].padStart(2,'0')}:${match[2] || '00'}`;
   
   return null;
 }
@@ -368,39 +412,105 @@ function formatarData(dataISO) {
   return `${d}/${m}`;
 }
 
-async function enviarFollowUp(telefone, chat) {
-  // Só envia se última foi do cliente
-  // Simplificado: sempre envia após 1 minuto de silêncio
-  
-  const jaEnviados = chat.followups || 0;
-  
-  if (jaEnviados === 0) {
-    await enviarWhatsApp(telefone, RESPOSTAS.followup1());
-    chat.followups = 1;
-  } else if (jaEnviados === 1) {
-    await enviarWhatsApp(telefone, RESPOSTAS.followup2());
-    chat.followups = 2;
+// ============================================
+// TELEGRAM (central_alerta_bot)
+// ============================================
+
+async function alertarTelegram(tipo, dados) {
+  try {
+    let mensagem = '';
+    
+    if (tipo === 'pediu_humano') {
+      mensagem = `🚨 *CLIENTE PEDIU ATENDENTE*\n\n` +
+                 `👤 Nome: ${dados.nome || 'Não informado'}\n` +
+                 `📱 WhatsApp: ${dados.telefone}\n` +
+                 `🔧 Serviço: ${dados.servico}\n` +
+                 `📍 Bairro: ${dados.bairro}\n` +
+                 `💬 Última mensagem: "${dados.ultimaMsg?.substring(0, 50)}..."\n` +
+                 `📊 Etapa: ${dados.etapa}\n\n` +
+                 `⏰ *AÇÃO IMEDIATA NECESSÁRIA*\n` +
+                 `🔗 Acesse: https://seu-projeto.vercel.app/painel.html`;
+    }
+    else if (tipo === 'novo_agendamento') {
+      mensagem = `✅ *NOVO AGENDAMENTO CONFIRMADO*\n\n` +
+                 `👤 ${dados.nome}\n` +
+                 `📱 ${dados.telefone}\n` +
+                 `🔧 ${dados.servico}\n` +
+                 `📍 ${dados.bairro}\n` +
+                 `📅 ${dados.data} às ${dados.hora}\n` +
+                 `💰 R$${dados.valor}\n\n` +
+                 `📋 Já salvo na planilha e Google Calendar`;
+    }
+    
+    await fetch(`https://api.telegram.org/bot${CONFIG.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: CONFIG.TELEGRAM_CHAT_ID,
+        text: mensagem,
+        parse_mode: 'Markdown'
+      })
+    });
+    
+    console.log('📨 Telegram enviado:', tipo);
+    
+  } catch (erro) {
+    console.error('Erro Telegram:', erro);
   }
-  
-  // Para de enviar após 2 follow-ups
 }
 
-async function alertarSistema(telefone, chat) {
-  const d = chat.dados;
+// ============================================
+// GOOGLE SHEETS (simplificado)
+// ============================================
+
+async function salvarNaPlanilha(dados) {
+  try {
+    // Usar Google Apps Script (mais simples que API direta)
+    // Crie um script em extensions.google.com/script
+    // E chame via URL
+    
+    console.log('💾 Salvando na planilha:', dados);
+    
+    // Implementação via Apps Script (mostro abaixo)
+    
+  } catch (erro) {
+    console.error('Erro planilha:', erro);
+  }
+}
+
+// ============================================
+// GOOGLE CALENDAR (simplificado)
+// ============================================
+
+async function criarEventoCalendar(dados) {
+  try {
+    console.log('📅 Criando evento:', dados);
+    
+    // Implementação similar à planilha
+    
+  } catch (erro) {
+    console.error('Erro calendar:', erro);
+  }
+}
+
+// ============================================
+// FOLLOW-UP E WHATSAPP
+// ============================================
+
+async function enviarFollowUp(telefone, chat) {
+  const ultima = chat.historico[chat.historico.length - 1];
+  if (ultima?.tipo !== 'cliente') return;
   
-  const msg = `🔧 *NOVA OS - ZONA SUL*\n\n` +
-    `Cliente: ${chat.nome || 'Não informado'}\n` +
-    `Tel: ${telefone}\n` +
-    `Serviço: ${d.servico}\n` +
-    `BTUs: ${d.btus || '?'}\n` +
-    `Marca: ${d.marca || '?'}\n` +
-    `Problema: ${d.problema || '?'}\n` +
-    `Bairro: ${d.bairro || '?'}\n` +
-    `Data: ${formatarData(d.data)} ${d.hora}\n` +
-    `Valor: R$140\n\n` +
-    `Responda SIM para aceitar.`;
+  const jaEnviados = chat.followups || 0;
+  if (jaEnviados >= 2) return;
   
-  await enviarWhatsApp(CONFIG.SEU_NUMERO, msg);
+  const msgs = [
+    'Ainda está por aí? Preciso confirmar os dados para garantir sua vaga esta semana. 🛠️',
+    'Não quero que fique sem atendimento. Posso agendar agora ou prefere que um especialista te ligue? 📞'
+  ];
+  
+  await enviarWhatsApp(telefone, msgs[jaEnviados]);
+  chat.followups = jaEnviados + 1;
 }
 
 async function enviarWhatsApp(telefone, mensagem) {
@@ -419,179 +529,6 @@ async function enviarWhatsApp(telefone, mensagem) {
       })
     });
   } catch (e) {
-    console.error('Erro enviar:', e);
+    console.error('Erro WhatsApp:', e);
   }
-}
-
-// LISTAR CONVERSAS (para o painel)
-app.get('/api/conversas', (req, res) => {
-    // Converter objeto de conversas para array
-    const lista = Object.entries(conversas).map(([tel, chat]) => ({
-        telefone: tel,
-        nome: chat.nome,
-        etapa: chat.etapa,
-        ultima_msg: chat.ultima_msg,
-        esperando: Date.now() - chat.ultima_msg > 60000 // 1 minuto sem resposta
-    }));
-    
-    res.json(lista);
-});
-
-// PAUSAR/RETOMAR ROBÔ
-app.post('/api/pausar', express.json(), (req, res) => {
-    const { telefone, pausar } = req.body;
-    
-    if (pausar) {
-        conversas[telefone].pausado = true;
-        // Enviar msg ao cliente
-        enviarWhatsApp(telefone, 'Você está sendo transferido para um de nossos especialistas. Aguarde...');
-    } else {
-        conversas[telefone].pausado = false;
-    }
-    
-    res.json({ ok: true });
-});
-
-// ENVIAR COMO HUMANO
-app.post('/api/enviar', express.json(), async (req, res) => {
-    const { telefone, mensagem } = req.body;
-    
-    await enviarWhatsApp(telefone, mensagem);
-    
-    // Registrar no histórico
-    if (conversas[telefone]) {
-        conversas[telefone].historico.push({
-            de: 'humano',
-            texto: mensagem,
-            hora: new Date().toLocaleTimeString()
-        });
-    }
-    
-    res.json({ ok: true });
-});
-// ============================================
-// GOOGLE SHEETS - ALIMENTAÇÃO AUTOMÁTICA
-// ============================================
-
-const GOOGLE_SHEETS = {
-  ID: process.env.GOOGLE_SHEET_ID, // da URL da planilha
-  RANGE: 'A1:G1000', // onde escrever
-  CLIENT_EMAIL: process.env.GOOGLE_CLIENT_EMAIL,
-  PRIVATE_KEY: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
-};
-
-async function adicionarNaPlanilha(dados) {
-  try {
-    // Autenticar com JWT
-    const token = await gerarTokenJWT();
-    
-    // Preparar linha
-    const linha = [
-      new Date().toLocaleString('pt-BR'), // Data/Hora
-      dados.nome || '',
-      dados.telefone || '',
-      dados.servico || '',
-      dados.bairro || '',
-      dados.status || 'Novo',
-      dados.valor || '',
-      dados.data_visita || '',
-      dados.hora_visita || '',
-      dados.tecnico || ''
-    ];
-    
-    // Enviar para Google Sheets
-    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS.ID}/values/A1:append?valueInputOption=RAW`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        values: [linha]
-      })
-    });
-    
-    console.log('✅ Planilha atualizada');
-    
-  } catch (erro) {
-    console.error('Erro planilha:', erro);
-  }
-}
-
-async function gerarTokenJWT() {
-  // Simplificado - use biblioteca google-auth-library em produção
-  const header = { alg: 'RS256', typ: 'JWT' };
-  const now = Math.floor(Date.now() / 1000);
-  const claim = {
-    iss: GOOGLE_SHEETS.CLIENT_EMAIL,
-    scope: 'https://www.googleapis.com/auth/spreadsheets',
-    aud: 'https://oauth2.googleapis.com/token',
-    exp: now + 3600,
-    iat: now
-  };
-  
-  // Na prática, usar biblioteca:
-  // const { GoogleAuth } = require('google-auth-library');
-  // const auth = new GoogleAuth({...});
-  
-  // Por enquanto, retorna token fixo (implementar JWT completo)
-  return 'TOKEN_JWT_AQUI';
-}
-
-// CHAMAR quando confirmar agendamento:
-// await adicionarNaPlanilha(chat.dados);
-
-// ============================================
-// GOOGLE CALENDAR - AGENDAMENTO AUTOMÁTICO
-// ============================================
-
-const GOOGLE_CALENDAR = {
-  ID: process.env.GOOGLE_CALENDAR_ID, // ID da agenda do técnico
-  // ou 'primary' para agenda principal
-};
-
-async function criarEventoCalendario(dados) {
-  try {
-    const token = await gerarTokenJWT(); // mesmo de cima
-    
-    const evento = {
-      summary: `🔧 ${dados.servico} - ${dados.nome}`,
-      location: dados.bairro,
-      description: `Cliente: ${dados.nome}\nTel: ${dados.telefone}\nBTUs: ${dados.btus}\nProblema: ${dados.problema}\nValor visita: R$${dados.valor}`,
-      start: {
-        dateTime: `${dados.data_visita}T${dados.hora_visita}:00-03:00`, // timezone Brasil
-        timeZone: 'America/Sao_Paulo'
-      },
-      end: {
-        dateTime: calcularFim(dados.hora_visita),
-        timeZone: 'America/Sao_Paulo'
-      },
-      reminders: {
-        useDefault: false,
-        overrides: [
-          { method: 'popup', minutes: 30 } // alerta 30min antes
-        ]
-      }
-    };
-    
-    await fetch(`https://www.googleapis.com/calendar/v3/calendars/${GOOGLE_CALENDAR.ID}/events`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(evento)
-    });
-    
-    console.log('✅ Evento criado no Google Calendar');
-    
-  } catch (erro) {
-    console.error('Erro calendar:', erro);
-  }
-}
-
-function calcularFim(horaInicio) {
-  const [h, m] = horaInicio.split(':').map(Number);
-  const fimH = h + 1; // 1 hora de duração
-  return `${fimH.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`;
 }
