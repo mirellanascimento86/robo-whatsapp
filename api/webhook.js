@@ -1,5 +1,5 @@
 // ============================================
-// CONFIGURAÇÕES - PREENCHA NO VERCEL
+// CONFIGURAÇÕES
 // ============================================
 const CONFIG = {
   SUPABASE_URL: process.env.SUPABASE_URL,
@@ -10,17 +10,52 @@ const CONFIG = {
   SEU_NUMERO: process.env.SEU_NUMERO
 };
 
+// MEMÓRIA DAS CONVERSAS
+const conversas = {};
+const timers = {}; // para follow-up
+
 // ============================================
-// MEMÓRIA TEMPORÁRIA (substituir por Supabase depois)
+// PROMPT DA CENTRAL DE ATENDIMENTO
 // ============================================
-const conversas = {}; // guarda no servidor
+
+const PROMPT_SISTEMA = `Você é a Central de Atendimento da Conecta Serviços, empresa de consertos residenciais no Rio de Janeiro.
+
+ESTILO DE COMUNICAÇÃO:
+- Profissional, direto, consultivo
+- NUNCA diga seu nome (você é uma central, não uma pessoa)
+- NUNCA use "eu sou Carlos" ou identificação pessoal
+- Sempre "nós", "nossa equipe", "o técnico"
+- Tom de venda: criar urgência, valor, confiança
+
+REGRAS DE PREÇO (ZONA SUL RJ):
+- Ar condicionado: R$140 (visita técnica)
+- Outros serviços: a definir
+
+ESTRUTURA OBRIGATÓRIA:
+1. SAUDAÇÃO: adaptada ao que cliente disse
+2. QUALIFICAÇÃO: BTUs, marca, problema, bairro (para ar)
+3. CONDIÇÃO DE PAGAMENTO: "Visita R$140, paga no ato. Se aprovar orçamento, vira crédito no serviço"
+4. FECHAMENTO: data/hora ou encaminhar técnico
+
+SE CLIENTE MANDAR FOTO/VÍDEO:
+- Agradeça
+- Peça para descrever o problema (foto ajuda mas não substitui diagnóstico)
+- Continue qualificação
+
+SE CLIENTE NÃO RESPONDER EM 1 MINUTO:
+- Envie follow-up criando urgência
+
+OBJEÇÕES COMUNS:
+- "Caro": "Entendo. Só lembrando que inclui diagnóstico completo. Se aprovar, vira crédito."
+- "Quero orçamento antes": "O técnico precisa avaliar no local para orçamento preciso. Por isso a visita."
+- "Vou pensar": "Claro. Só aviso que vagas para esta semana estão acabando."`;
 
 // ============================================
 // FUNÇÃO PRINCIPAL
 // ============================================
+
 export default async function handler(req, res) {
   
-  // Verificação do Facebook (GET)
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -32,7 +67,6 @@ export default async function handler(req, res) {
     return res.status(403).send('Forbidden');
   }
 
-  // Receber mensagem (POST)
   if (req.method === 'POST') {
     try {
       const entry = req.body.entry?.[0];
@@ -43,190 +77,85 @@ export default async function handler(req, res) {
       if (!message) return res.status(200).send('OK');
       
       const telefone = message.from;
-      const nome = value.contacts?.[0]?.profile?.name || 'Cliente';
+      const nome = value.contacts?.[0]?.profile?.name || '';
       
-      // Ignorar eco
       if (telefone === CONFIG.WHATSAPP_PHONE_ID) return res.status(200).send('OK');
       
-      // Pegar texto da mensagem
-      let texto = '';
+      // Processar mensagem
+      let entrada = {
+        tipo: message.type,
+        texto: '',
+        midia_descricao: ''
+      };
+      
       if (message.type === 'text') {
-        texto = message.text.body;
-      } else if (message.type === 'audio') {
-        texto = '[áudio - não processado]';
+        entrada.texto = message.text.body;
       } else if (message.type === 'image') {
-        texto = '[imagem - não processada]';
-      } else {
-        texto = `[${message.type}]`;
+        entrada.texto = '[imagem recebida]';
+        entrada.midia_descricao = 'Cliente enviou foto do equipamento/problema';
+      } else if (message.type === 'video') {
+        entrada.texto = '[vídeo recebido]';
+        entrada.midia_descricao = 'Cliente enviou vídeo mostrando o problema';
+      } else if (message.type === 'audio') {
+        entrada.texto = '[áudio recebido]';
+        entrada.midia_descricao = 'Cliente enviou áudio descrevendo';
       }
-      
-      console.log(`[${new Date().toLocaleTimeString()}] ${nome}: ${texto.substring(0, 50)}`);
-      
-      // ============================================
-      // LÓGICA DO ATENDIMENTO (SEM IA POR ENQUANTO)
-      // ============================================
       
       // Buscar ou criar conversa
       if (!conversas[telefone]) {
         conversas[telefone] = {
           nome: nome,
           etapa: 'inicio',
-          servico: null,
-          bairro: null,
-          data: null,
-          hora: null,
-          especificacoes: {}
+          historico: [],
+          dados: {},
+          ultima_msg: Date.now()
         };
       }
       
       const chat = conversas[telefone];
-      let resposta = '';
+      chat.ultima_msg = Date.now();
       
-      // ETAPA 1: INÍCIO - Identificar serviço
-      if (chat.etapa === 'inicio') {
-        const servico = detectarServico(texto);
-        
-        if (servico) {
-          chat.servico = servico;
-          chat.etapa = 'perguntar_bairro';
-          
-          resposta = `Olá ${nome}! 😊\n\nVi que precisa de ${formatarServico(servico)}. Sou Carlos, consultor técnico.\n\nPara agendar com o técnico certo, me diga:\n📍 Qual bairro?`;
-        } else {
-          resposta = `Olá ${nome}! Sou Carlos da Conecta Serviços. 🛠️\n\nPosso agendar para você:\n• Ar condicionado\n• Geladeira  \n• Máquina de lavar\n• Reforma\n\nQual serviço precisa?`;
-        }
-      }
+      // Adicionar ao histórico
+      chat.historico.push({
+        role: 'user',
+        content: entrada.texto,
+        timestamp: new Date().toISOString()
+      });
       
-      // ETAPA 2: PERGUNTAR BAIRRO
-      else if (chat.etapa === 'perguntar_bairro') {
-        const bairro = extrairBairro(texto);
-        
-        if (bairro && bairro.length > 2) {
-          chat.bairro = bairro;
-          chat.etapa = 'perguntar_especificacoes';
-          
-          // Pergunta específica conforme serviço
-          if (chat.servico === 'ar_condicionado') {
-            resposta = `Perfeito! ${bairro} anotado. 📍\n\nAgora me diga:\n❄️ Quantos BTUs? (ex: 9000, 12000, 18000)\n🏠 Quantos ambientes?`;
-          } 
-          else if (chat.servico === 'reforma') {
-            resposta = `Ótimo! ${bairro} anotado. 📍\n\nPara orçamento preciso:\n📐 Metragem da área? (ex: 40m²)\n🚪 Quantos cômodos?\n⚡ É reforma simples ou completa?`;
-          }
-          else if (chat.servico === 'geladeira') {
-            resposta = `${bairro} anotado. 📍\n\nQual tipo?\n• Frost free\n• Duplex/Side by side\n• Convencional\n\nE qual marca?`;
-          }
-          else {
-            resposta = `${bairro} anotado. 📍\n\nQual a capacidade da máquina? (kg)\nE qual marca?`;
-          }
-        } else {
-          resposta = `Não entendi o bairro. Pode digitar só o nome? Ex: "Moema" ou "Centro"`;
-        }
-      }
+      // Montar contexto para IA
+      const contexto = montarContexto(chat, nome, entrada);
       
-      // ETAPA 3: PERGUNTAR ESPECIFICAÇÕES
-      else if (chat.etapa === 'perguntar_especificacoes') {
-        // Salvar o que o cliente disse
-        chat.especificacoes.resposta_cliente = texto;
-        
-        // Tentar extrair números
-        const numeros = texto.match(/\d+/g);
-        if (numeros) {
-          if (chat.servico === 'ar_condicionado' && numeros[0]) {
-            chat.especificacoes.btus = numeros[0];
-          }
-          if (chat.servico === 'reforma' && numeros[0]) {
-            chat.especificacoes.metragem = numeros[0];
-          }
-        }
-        
-        chat.etapa = 'perguntar_data';
-        resposta = `Entendi! Anotado: "${texto.substring(0, 30)}..."\n\nAgora a data:\n📅 Quando prefere? (pode dizer "amanhã", "segunda" ou "25/03")`;
-      }
+      // Chamar IA Groq
+      const respostaIA = await chamarGroq(contexto);
       
-      // ETAPA 4: PERGUNTAR DATA
-      else if (chat.etapa === 'perguntar_data') {
-        const data = detectarData(texto);
-        
-        if (data) {
-          chat.data = data;
-          chat.etapa = 'perguntar_hora';
-          resposta = `Data: ${formatarData(data)}. 📅\n\nHorário:\n🕐 "Manhã" (9h), "Tarde" (14h) ou digite horário (15h30)?`;
-        } else {
-          resposta = `Não entendi. Pode dizer:\n• "Amanhã"\n• "Segunda-feira"  \n• "25/03"`;
-        }
-      }
+      // Adicionar resposta ao histórico
+      chat.historico.push({
+        role: 'assistant',
+        content: respostaIA,
+        timestamp: new Date().toISOString()
+      });
       
-      // ETAPA 5: PERGUNTAR HORA
-      else if (chat.etapa === 'perguntar_hora') {
-        const hora = detectarHora(texto);
-        
-        if (hora) {
-          chat.hora = hora;
-          chat.etapa = 'apresentar_valor';
-          
-          // Calcular valor
-          const valor = calcularValor(chat);
-          
-          resposta = `✅ Quase lá!\n\n` +
-                     `Resumo:\n` +
-                     `• ${formatarServico(chat.servico)}\n` +
-                     `• ${chat.bairro}\n` +
-                     `• ${formatarData(chat.data)} às ${hora}\n` +
-                     `• Especificações: ${JSON.stringify(chat.especificacoes).substring(0, 50)}\n\n` +
-                     `💰 Valor da visita técnica: R$${valor}\n\n` +
-                     `Inclui: diagnóstico completo + orçamento detalhado. Se aprovar o serviço, a visita entra como crédito.\n\n` +
-                     `Podemos confirmar?`;
-        } else {
-          resposta = `Pode dizer:\n• "Manhã"\n• "Tarde"\n• "14h30"`;
-        }
-      }
+      // Extrair dados da resposta
+      const dadosExtraidos = extrairDados(entrada.texto, respostaIA);
+      chat.dados = { ...chat.dados, ...dadosExtraidos };
       
-      // ETAPA 6: CONFIRMAR OU NEGOCIAR
-      else if (chat.etapa === 'apresentar_valor') {
-        const t = texto.toLowerCase();
-        
-        if (t.includes('sim') || t.includes('ok') || t.includes('pode') || t.includes('confirmo')) {
-          chat.etapa = 'agendado';
-          
-          // ALERTA TÉCNICO E VOCÊ
-          const msgTecnico = `🔧 NOVA OS\nCliente: ${chat.nome}\nTel: ${telefone}\nServiço: ${chat.servico}\nLocal: ${chat.bairro}\nData: ${chat.data} ${chat.hora}\nEspec: ${JSON.stringify(chat.especificacoes)}\nValor: R$${calcularValor(chat)}\n\nResponda SIM para aceitar.`;
-          
-          await enviarWhatsApp(CONFIG.SEU_NUMERO, msgTecnico);
-          
-          resposta = `🎉 *AGENDAMENTO CONFIRMADO!*\n\n` +
-                     `📅 ${formatarData(chat.data)} às ${chat.hora}\n` +
-                     `📍 ${chat.bairro}\n` +
-                     `💰 R$${calcularValor(chat)}\n\n` +
-                     `Nosso técnico entrará em contato 30 min antes. Obrigado pela confiança! 🛠️`;
-        }
-        else if (t.includes('caro') || t.includes('desconto') || t.includes('negocia') || t.includes('menos')) {
-          const valorOriginal = calcularValor(chat);
-          const valorNegociado = Math.floor(valorOriginal * 0.9); // 10% desconto
-          
-          resposta = `Entendo que precisa avaliar. 💡\n\n` +
-                     `Consigo ajustar para R$${valorNegociado} se confirmarmos hoje para amanhã ou esta semana. É uma vaga que abriu na agenda.\n\n` +
-                     `Topa?`;
-        }
-        else {
-          resposta = `Sem problema! Posso:\n• Explicar o que inclui a visita\n• Ver outro horário (pode ser mais barato)\n• Passar para atendente humano\n\nO que prefere?`;
-        }
-      }
-      
-      // ETAPA 7: JÁ AGENDADO
-      else if (chat.etapa === 'agendado') {
-        resposta = `Seu agendamento está confirmado! ✅\n\nSe precisar remarcar ou cancelar, é só avisar.`;
-      }
-      
-      // Se pediu humano em qualquer etapa
-      if (texto.toLowerCase().includes('humano') || texto.toLowerCase().includes('atendente') || texto.toLowerCase().includes('pessoa')) {
-        resposta = 'Vou chamar um atendente. Aguarde... ⏳';
-        await enviarWhatsApp(CONFIG.SEU_NUMERO, `🚨 ${nome} pediu humano: ${telefone}`);
-      }
+      // Atualizar etapa
+      chat.etapa = determinarEtapa(chat.etapa, chat.dados);
       
       // Enviar resposta
-      await enviarWhatsApp(telefone, resposta);
+      await enviarWhatsApp(telefone, respostaIA);
       
-      // Log
-      console.log(`Resposta: ${resposta.substring(0, 50)}...`);
+      // Agendar follow-up em 1 minuto
+      if (timers[telefone]) clearTimeout(timers[telefone]);
+      timers[telefone] = setTimeout(() => {
+        enviarFollowUp(telefone, chat);
+      }, 60000); // 1 minuto
+      
+      // Se tem todos os dados, alertar técnico
+      if (chat.etapa === 'pronto_enviar' && !chat.tecnico_alertado) {
+        await alertarTecnico(telefone, chat);
+        chat.tecnico_alertado = true;
+      }
       
       return res.status(200).send('OK');
       
@@ -238,117 +167,159 @@ export default async function handler(req, res) {
 }
 
 // ============================================
-// FUNÇÕES AUXILIARES
+// FUNÇÕES DE CONTEXTO E IA
 // ============================================
 
-function detectarServico(texto) {
-  const t = texto.toLowerCase();
-  if (t.includes('geladeira')) return 'geladeira';
-  if (t.includes('ar') || t.includes('condicionado') || t.includes('split')) return 'ar_condicionado';
-  if (t.includes('máquina') || t.includes('maquina') || t.includes('lavar')) return 'maquina_lavar';
-  if (t.includes('reforma') || t.includes('pintura') || t.includes('azulejo')) return 'reforma';
-  return null;
-}
-
-function formatarServico(s) {
-  const map = {
-    'geladeira': 'conserto de geladeira',
-    'ar_condicionado': 'ar condicionado',
-    'maquina_lavar': 'máquina de lavar',
-    'reforma': 'reforma residencial'
-  };
-  return map[s] || s;
-}
-
-function extrairBairro(texto) {
-  // Remove palavras comuns
-  let limpo = texto
-    .toLowerCase()
-    .replace(/bairro|rua|av|avenida|travessa|moro|fica|em|no|na|no\s|na\s/g, '')
-    .replace(/[^\w\s]/g, '')
-    .trim();
+function montarContexto(chat, nome, entrada) {
+  let contexto = '';
   
-  // Capitaliza primeira letra
-  return limpo.charAt(0).toUpperCase() + limpo.slice(1);
-}
-
-function detectarData(texto) {
-  const hoje = new Date();
-  const t = texto.toLowerCase();
-  
-  if (t.includes('hoje')) return hoje.toISOString().split('T')[0];
-  
-  if (t.includes('amanhã') || t.includes('amanha')) {
-    const amanha = new Date(hoje);
-    amanha.setDate(amanha.getDate() + 1);
-    return amanha.toISOString().split('T')[0];
+  // Saudação adaptada
+  if (chat.etapa === 'inicio' && chat.historico.length === 0) {
+    contexto += `PRIMEIRA MENSAGEM DO CLIENTE: "${entrada.texto}"\n\n`;
+    contexto += `INSTRUÇÃO: Se cliente disse apenas "oi", "olá", etc, responda EXATAMENTE:\n`;
+    contexto += `"Olá, essa é a Central de Atendimento. Para melhor ajudá-lo(a), me informe qual serviço deseja?"\n\n`;
+    contexto += `Se cliente já disse o serviço (ar, geladeira, etc), pule saudação e vá direto para qualificação.\n\n`;
   }
   
-  // Dias da semana
-  const dias = ['domingo','segunda','terça','terca','quarta','quinta','sexta','sábado','sabado'];
-  for (let i = 0; i < dias.length; i++) {
-    if (t.includes(dias[i])) {
-      const hojeNum = hoje.getDay();
-      let diasAdd = i - hojeNum;
-      if (diasAdd <= 0) diasAdd += 7;
-      const data = new Date(hoje);
-      data.setDate(data.getDate() + diasAdd);
-      return data.toISOString().split('T')[0];
-    }
+  contexto += `HISTÓRICO DA CONVERSA:\n`;
+  chat.historico.slice(-6).forEach((msg, i) => {
+    contexto += `${msg.role === 'user' ? 'Cliente' : 'Central'}: ${msg.content}\n`;
+  });
+  
+  contexto += `\nDADOS JÁ COLETADOS: ${JSON.stringify(chat.dados)}\n`;
+  contexto += `ETAPA ATUAL: ${chat.etapa}\n`;
+  
+  if (entrada.midia_descricao) {
+    contexto += `\nMÍDIA RECEBIDA: ${entrada.midia_descricao}\n`;
   }
   
-  // Formato DD/MM ou DD-MM
-  const match = texto.match(/(\d{1,2})[\/\-](\d{1,2})/);
-  if (match) {
-    const [_, dia, mes] = match;
-    const ano = hoje.getFullYear();
-    return `${ano}-${mes.padStart(2,'0')}-${dia.padStart(2,'0')}`;
-  }
+  contexto += `\nINSTRUÇÃO FINAL: Responda como Central de Atendimento. Não se identifique. Seja vendedor.`;
   
-  return null;
+  return contexto;
 }
 
-function detectarHora(texto) {
-  const t = texto.toLowerCase();
-  if (t.includes('manhã') || t.includes('manha')) return '09:00';
-  if (t.includes('tarde')) return '14:00';
-  if (t.includes('noite')) return '18:00';
-  
-  const match = texto.match(/(\d{1,2})[h:](\d{2})?/);
-  if (match) {
-    return `${match[1].padStart(2,'0')}:${match[2] || '00'}`;
+async function chamarGroq(contexto) {
+  try {
+    const resposta = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${CONFIG.GROQ_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'llama3-70b-8192',
+        messages: [
+          { role: 'system', content: PROMPT_SISTEMA },
+          { role: 'user', content: contexto }
+        ],
+        temperature: 0.8,
+        max_tokens: 400
+      })
+    });
+    
+    const dados = await resposta.json();
+    return dados.choices?.[0]?.message?.content || 'Desculpe, tivemos um problema. Um atendente vai te ajudar.';
+    
+  } catch (erro) {
+    console.error('Erro Groq:', erro);
+    return 'Desculpe, estamos com instabilidade. Pode repetir?';
   }
-  
-  return null;
 }
 
-function formatarData(dataISO) {
-  if (!dataISO) return '';
-  const [a, m, d] = dataISO.split('-');
-  return `${d}/${m}`;
+// ============================================
+// FUNÇÕES DE PROCESSAMENTO
+// ============================================
+
+function extrairDados(textoCliente, respostaIA) {
+  const t = textoCliente.toLowerCase();
+  const dados = {};
+  
+  // Detectar serviço
+  if (t.includes('ar') || t.includes('condicionado') || t.includes('split')) {
+    dados.servico = 'ar_condicionado';
+    dados.valor_visita = 140;
+  } else if (t.includes('geladeira')) {
+    dados.servico = 'geladeira';
+  } else if (t.includes('máquina') || t.includes('lavar')) {
+    dados.servico = 'maquina_lavar';
+  } else if (t.includes('reforma')) {
+    dados.servico = 'reforma';
+  }
+  
+  // Extrair BTUs
+  const btusMatch = t.match(/(\d+)\s*(btus?|btu)/);
+  if (btusMatch) dados.btus = btusMatch[1];
+  
+  // Extrair marca
+  const marcas = ['samsung', 'lg', 'electrolux', 'consul', 'brastemp', 'panasonic', 'fujitsu', 'gree', 'carrier'];
+  for (const marca of marcas) {
+    if (t.includes(marca)) dados.marca = marca;
+  }
+  
+  // Extrair bairro (Zona Sul RJ)
+  const bairrosZS = ['copacabana', 'ipanema', 'leblon', 'botafogo', 'flamengo', 'laranjeiras', 'cosme velho', 'jardim botânico', 'gávea', 'são conrado', 'vidigal', 'rocinha', 'humaitá', 'urca'];
+  for (const bairro of bairrosZS) {
+    if (t.includes(bairro)) dados.bairro = bairro;
+  }
+  
+  // Extrair problema
+  if (t.includes('não liga') || t.includes('nao liga')) dados.problema = 'nao_liga';
+  if (t.includes('não gela') || t.includes('nao gela')) dados.problema = 'nao_gela';
+  if (t.includes('vazamento') || t.includes('pingando')) dados.problema = 'vazamento';
+  if (t.includes('barulho') || t.includes('ruido')) dados.problema = 'barulho';
+  
+  return dados;
 }
 
-function calcularValor(chat) {
-  const base = {
-    'geladeira': 80,
-    'ar_condicionado': 120,
-    'maquina_lavar': 80,
-    'reforma': 150
-  };
-  
-  let valor = base[chat.servico] || 100;
-  
-  // Ajustes por especificações
-  if (chat.servico === 'ar_condicionado' && chat.especificacoes.btus) {
-    if (parseInt(chat.especificacoes.btus) > 12000) valor += 50;
+function determinarEtapa(etapaAtual, dados) {
+  if (etapaAtual === 'inicio' && dados.servico) return 'qualificando';
+  if (etapaAtual === 'qualificando' && dados.servico === 'ar_condicionado') {
+    if (dados.btus && dados.marca && dados.bairro && dados.problema) return 'apresentando_valor';
   }
+  if (etapaAtual === 'apresentando_valor') return 'negociando';
+  if (etapaAtual === 'negociando') return 'pronto_enviar';
+  return etapaAtual;
+}
+
+async function enviarFollowUp(telefone, chat) {
+  // Só envia se última mensagem foi do cliente (esperando resposta)
+  const ultima = chat.historico[chat.historico.length - 1];
+  if (ultima?.role !== 'user') return;
   
-  if (chat.servico === 'reforma' && chat.especificacoes.metragem) {
-    const m2 = parseInt(chat.especificacoes.metragem);
-    if (m2 > 50) valor += (m2 - 50) * 2;
-  }
+  const followUps = [
+    'Ainda está por aí? Preciso confirmar alguns detalhes para garantir a vaga esta semana. 🛠️',
+    'Só lembrando: as vagas para Zona Sul estão acabando. Consegue me responder rapidinho?',
+    'Não quero que fique sem atendimento. Posso agendar agora ou prefere outro dia?'
+  ];
   
-  return valor;
+  const msg = followUps[Math.min(chat.historico.filter(m => m.role === 'assistant').length, 2)];
+  
+  await enviarWhatsApp(telefone, msg);
+  
+  chat.historico.push({
+    role: 'assistant',
+    content: msg,
+    timestamp: new Date().toISOString(),
+    tipo: 'follow_up'
+  });
+}
+
+async function alertarTecnico(telefone, chat) {
+  const d = chat.dados;
+  
+  const msgTecnico = `🔧 *NOVA OPORTUNIDADE - ZONA SUL*\n\n` +
+    `Cliente: ${chat.nome || 'Não informado'}\n` +
+    `Tel: ${telefone}\n` +
+    `Serviço: ${d.servico}\n` +
+    `BTUs: ${d.btus || '?'}\n` +
+    `Marca: ${d.marca || '?'}\n` +
+    `Problema: ${d.problema || '?'}\n` +
+    `Bairro: ${d.bairro || '?'}\n` +
+    `Valor visita: R$${d.valor_visita || 140}\n\n` +
+    `Responda SIM para aceitar ou NÃO para recusar.`;
+  
+  // Envia para você (substituir por lista de técnicos depois)
+  await enviarWhatsApp(CONFIG.SEU_NUMERO, msgTecnico);
 }
 
 async function enviarWhatsApp(telefone, mensagem) {
@@ -366,6 +337,7 @@ async function enviarWhatsApp(telefone, mensagem) {
         text: { body: mensagem }
       })
     });
+    console.log(`Enviado para ${telefone}: ${mensagem.substring(0, 50)}...`);
   } catch (e) {
     console.error('Erro enviar:', e);
   }
