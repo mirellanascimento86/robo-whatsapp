@@ -469,3 +469,74 @@ app.post('/api/enviar', express.json(), async (req, res) => {
     
     res.json({ ok: true });
 });
+// ============================================
+// GOOGLE SHEETS - ALIMENTAÇÃO AUTOMÁTICA
+// ============================================
+
+const GOOGLE_SHEETS = {
+  ID: process.env.GOOGLE_SHEET_ID, // da URL da planilha
+  RANGE: 'A1:G1000', // onde escrever
+  CLIENT_EMAIL: process.env.GOOGLE_CLIENT_EMAIL,
+  PRIVATE_KEY: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n')
+};
+
+async function adicionarNaPlanilha(dados) {
+  try {
+    // Autenticar com JWT
+    const token = await gerarTokenJWT();
+    
+    // Preparar linha
+    const linha = [
+      new Date().toLocaleString('pt-BR'), // Data/Hora
+      dados.nome || '',
+      dados.telefone || '',
+      dados.servico || '',
+      dados.bairro || '',
+      dados.status || 'Novo',
+      dados.valor || '',
+      dados.data_visita || '',
+      dados.hora_visita || '',
+      dados.tecnico || ''
+    ];
+    
+    // Enviar para Google Sheets
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS.ID}/values/A1:append?valueInputOption=RAW`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        values: [linha]
+      })
+    });
+    
+    console.log('✅ Planilha atualizada');
+    
+  } catch (erro) {
+    console.error('Erro planilha:', erro);
+  }
+}
+
+async function gerarTokenJWT() {
+  // Simplificado - use biblioteca google-auth-library em produção
+  const header = { alg: 'RS256', typ: 'JWT' };
+  const now = Math.floor(Date.now() / 1000);
+  const claim = {
+    iss: GOOGLE_SHEETS.CLIENT_EMAIL,
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600,
+    iat: now
+  };
+  
+  // Na prática, usar biblioteca:
+  // const { GoogleAuth } = require('google-auth-library');
+  // const auth = new GoogleAuth({...});
+  
+  // Por enquanto, retorna token fixo (implementar JWT completo)
+  return 'TOKEN_JWT_AQUI';
+}
+
+// CHAMAR quando confirmar agendamento:
+// await adicionarNaPlanilha(chat.dados);
