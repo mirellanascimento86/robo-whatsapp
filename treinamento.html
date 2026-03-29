@@ -1,89 +1,473 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
-  <title>Treinar Carlos (IA)</title>
-  <style>
-    body { font-family: Arial; max-width: 1200px; margin: 0 auto; padding: 20px; }
-    .card { background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 8px; }
-    textarea { width: 100%; height: 100px; font-family: monospace; }
-    button { background: #4CAF50; color: white; padding: 10px 20px; border: none; cursor: pointer; }
-    .exemplo { background: #e3f2fd; padding: 10px; margin: 10px 0; border-left: 4px solid #2196F3; }
-  </style>
+    <meta charset="UTF-8">
+    <title>🎛️ Central de Controle - Robô WhatsApp</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #1a1a2e;
+            color: #fff;
+            padding: 20px;
+        }
+        
+        h1 { 
+            color: #00d9ff; 
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-box {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border-left: 4px solid #00d9ff;
+        }
+        
+        .stat-box h3 { color: #888; font-size: 12px; margin-bottom: 5px; }
+        .stat-box .number { font-size: 28px; font-weight: bold; color: #00d9ff; }
+        
+        .conversas {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .lista-conversas {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .lista-conversas h2 {
+            color: #00d9ff;
+            font-size: 16px;
+            margin-bottom: 15px;
+        }
+        
+        .conversa-item {
+            background: #0f3460;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-left: 3px solid transparent;
+        }
+        
+        .conversa-item:hover { background: #1a4a7a; }
+        .conversa-item.ativa { border-left-color: #00d9ff; background: #1a4a7a; }
+        .conversa-item.esperando { border-left-color: #ff9800; }
+        .conversa-item.humano { border-left-color: #4caf50; }
+        
+        .conversa-item .telefone { font-weight: bold; color: #00d9ff; }
+        .conversa-item .nome { color: #888; font-size: 12px; }
+        .conversa-item .etapa { 
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            margin-top: 5px;
+        }
+        .etapa-inicio { background: #ff9800; }
+        .etapa-qualificando { background: #2196f3; }
+        .etapa-apresentando { background: #9c27b0; }
+        .etapa-confirmado { background: #4caf50; }
+        
+        .detalhe-conversa {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 15px;
+        }
+        
+        .chat-box {
+            background: #0f3460;
+            border-radius: 8px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+        }
+        
+        .msg {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+        
+        .msg-cliente {
+            background: #16213e;
+            margin-right: auto;
+            border-left: 3px solid #ff9800;
+        }
+        
+        .msg-robo {
+            background: #1a4a7a;
+            margin-left: auto;
+            border-right: 3px solid #00d9ff;
+        }
+        
+        .controles {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        button {
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        
+        .btn-assumir {
+            background: #4caf50;
+            color: white;
+        }
+        .btn-assumir:hover { background: #45a049; }
+        
+        .btn-pausar {
+            background: #ff9800;
+            color: white;
+        }
+        .btn-pausar:hover { background: #e68900; }
+        
+        .btn-enviar {
+            background: #00d9ff;
+            color: #1a1a2e;
+            grid-column: span 2;
+        }
+        .btn-enviar:hover { background: #00b8d4; }
+        
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: none;
+            background: #0f3460;
+            color: #fff;
+            resize: vertical;
+            min-height: 60px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .status-online { background: #4caf50; animation: pulse 2s infinite; }
+        .status-offline { background: #f44336; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .tempo-real {
+            font-size: 12px;
+            color: #888;
+            margin-top: 10px;
+        }
+        
+        .alerta {
+            background: #ff9800;
+            color: #1a1a2e;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-weight: bold;
+            display: none;
+        }
+        .alerta.ativo { display: block; }
+    </style>
 </head>
 <body>
-  <h1>🎓 Escola do Carlos (Treinamento da IA)</h1>
-  
-  <div class="card">
-    <h2>1. Prompt do Vendedor (Personalidade)</h2>
-    <p>Edite como Carlos deve se comportar:</p>
-    <textarea id="prompt-vendedor">
-Você é Carlos, consultor técnico sênior...
-    </textarea>
-    <button onclick="salvarPrompt()">Salvar Nova Personalidade</button>
-  </div>
-  
-  <div class="card">
-    <h2>2. Tabela de Preços Dinâmica</h2>
-    <p>Ajuste valores conforme mercado:</p>
-    <table border="1" cellpadding="10">
-      <tr>
-        <th>Serviço</th>
-        <th>Valor Base</th>
-        <th>Variáveis que aumentam</th>
-      </tr>
-      <tr>
-        <td>Ar Condicionado</td>
-        <td><input type="number" id="preco-ar" value="120"></td>
-        <td>BTUs, andar, marca</td>
-      </tr>
-      <tr>
-        <td>Geladeira</td>
-        <td><input type="number" id="preco-gel" value="80"></td>
-        <td>Tipo, marca importada</td>
-      </tr>
-      <tr>
-        <td>Reforma</td>
-        <td><input type="number" id="preco-ref" value="150"></td>
-        <td>Metragem, cômodos, urgência</td>
-      </tr>
-    </table>
-    <button onclick="atualizarPrecos()">Atualizar Preços</button>
-  </div>
-  
-  <div class="card">
-    <h2>3. Exemplos de Conversas (Few-Shot Learning)</h2>
-    <p>Adicione exemplos reais para Carlos aprender:</p>
+    <h1>🎛️ Central de Controle - Robô WhatsApp</h1>
     
-    <div class="exemplo">
-      <strong>Cliente:</strong> "Minha geladeira está quente"<br>
-      <strong>Carlos (bom):</strong> "Entendo, isso é urgente para preservar seus alimentos. É frost-free ou convencional? Isso me ajuda a trazer as peças certas."<br>
-      <strong>Carlos (ruim):</strong> "Ok, vou mandar um técnico." ❌
+    <div class="alerta" id="alerta">
+        ⚠️ <span id="alerta-texto">Cliente aguardando há mais de 2 minutos!</span>
     </div>
     
-    <textarea id="novo-exemplo" placeholder="Cole conversa real aqui..."></textarea>
-    <button onclick="adicionarExemplo()">Adicionar ao Treinamento</button>
-  </div>
-  
-  <div class="card">
-    <h2>4. Testar Carlos Agora</h2>
-    <p>Simule uma conversa:</p>
-    <input type="text" id="simular-cliente" placeholder="Digite como se fosse cliente..." style="width: 70%">
-    <button onclick="testarCarlos()">Enviar para Carlos</button>
-    <div id="resposta-carlos" style="margin-top: 20px; padding: 15px; background: white; border: 1px solid #ddd;"></div>
-  </div>
+    <div class="stats">
+        <div class="stat-box">
+            <h3>🟢 ONLINE</h3>
+            <div class="number"><span class="status-indicator status-online"></span>Robô</div>
+        </div>
+        <div class="stat-box">
+            <h3>💬 CONVERSAS ATIVAS</h3>
+            <div class="number" id="total-conversas">0</div>
+        </div>
+        <div class="stat-box">
+            <h3>⏳ AGUARDANDO</h3>
+            <div class="number" id="total-esperando">0</div>
+        </div>
+        <div class="stat-box">
+            <h3>👤 MODO HUMANO</h3>
+            <div class="number" id="total-humano">0</div>
+        </div>
+    </div>
+    
+    <div class="conversas">
+        <div class="lista-conversas">
+            <h2>📋 Conversas em Andamento</h2>
+            <div id="lista-conversas">
+                <p style="color: #888; text-align: center;">Carregando...</p>
+            </div>
+        </div>
+        
+        <div class="detalhe-conversa">
+            <h2>💬 Conversa Selecionada</h2>
+            <div id="info-cliente" style="margin-bottom: 10px; color: #888;">
+                Clique em uma conversa para ver detalhes
+            </div>
+            
+            <div class="chat-box" id="chat-box">
+                <p style="color: #888; text-align: center; margin-top: 100px;">
+                    Selecione uma conversa à esquerda
+                </p>
+            </div>
+            
+            <div class="tempo-real" id="tempo-real"></div>
+            
+            <div class="controles" id="controles" style="display: none;">
+                <button class="btn-assumir" onclick="assumirConversa()">
+                    👤 ASSUMIR CONVERSA
+                </button>
+                <button class="btn-pausar" onclick="pausarRobo()">
+                    ⏸️ PAUSAR ROBÔ
+                </button>
+                
+                <textarea id="msg-humano" placeholder="Digite sua mensagem para o cliente..."></textarea>
+                <button class="btn-enviar" onclick="enviarComoHumano()">
+                    📤 ENVIAR COMO ATENDENTE
+                </button>
+            </div>
+        </div>
+    </div>
 
-  <script>
-    // Funções seriam conectadas ao backend
-    function salvarPrompt() { alert('Salvo! (conectar ao backend)'); }
-    function atualizarPrecos() { alert('Preços atualizados!'); }
-    function adicionarExemplo() { alert('Exemplo adicionado!'); }
-    function testarCarlos() {
-      const msg = document.getElementById('simular-cliente').value;
-      document.getElementById('resposta-carlos').innerHTML = 
-        '<em>Carlos está pensando...</em><br><br>' +
-        '<strong>Carlos:</strong> Olá! Sou Carlos, consultor técnico. Entendo que você precisa de ajuda. ' +
-        'Para eu trazer a solução exata, consegue me contar um pouco mais sobre o que está acontecendo?';
-    }
-  </script>
+    <script>
+        let conversaSelecionada = null;
+        let conversas = {};
+        let modoHumano = {};
+        
+        // Simular dados (substituir por chamada real ao backend)
+        function carregarConversas() {
+            // AQUI VOCÊ VAI CONECTAR COM SEU BACKEND
+            // Por enquanto, exemplo estático:
+            
+            fetch('/api/conversas') // CRIAR ESTE ENDPOINT NO BACKEND
+                .then(r => r.json())
+                .then(dados => {
+                    conversas = dados;
+                    renderizarLista();
+                })
+                .catch(() => {
+                    // Modo demo - mostra estrutura
+                    document.getElementById('lista-conversas').innerHTML = `
+                        <div class="conversa-item esperando" onclick="selecionar('5511999999999')">
+                            <div class="telefone">5511999999999</div>
+                            <div class="nome">Maria Silva</div>
+                            <span class="etapa etapa-qualificando">QUALIFICANDO</span>
+                            <div style="font-size: 11px; color: #888; margin-top: 5px;">
+                                Última: há 30 segundos
+                            </div>
+                        </div>
+                        <div class="conversa-item" onclick="selecionar('5511988888888')">
+                            <div class="telefone">5511988888888</div>
+                            <div class="nome">João Santos</div>
+                            <span class="etapa etapa-confirmado">CONFIRMADO</span>
+                        </div>
+                    `;
+                    atualizarStats();
+                });
+        }
+        
+        function renderizarLista() {
+            const container = document.getElementById('lista-conversas');
+            container.innerHTML = '';
+            
+            Object.entries(conversas).forEach(([tel, chat]) => {
+                const div = document.createElement('div');
+                div.className = `conversa-item ${chat.esperando ? 'esperando' : ''} ${modoHumano[tel] ? 'humano' : ''}`;
+                div.onclick = () => selecionar(tel);
+                
+                div.innerHTML = `
+                    <div class="telefone">${tel}</div>
+                    <div class="nome">${chat.nome || 'Sem nome'}</div>
+                    <span class="etapa etapa-${chat.etapa}">${chat.etapa.toUpperCase()}</span>
+                    <div style="font-size: 11px; color: #888; margin-top: 5px;">
+                        ${modoHumano[tel] ? '👤 MODO HUMANO' : '🤖 Robô ativo'}
+                    </div>
+                `;
+                
+                container.appendChild(div);
+            });
+            
+            atualizarStats();
+        }
+        
+        function selecionar(telefone) {
+            conversaSelecionada = telefone;
+            const chat = conversas[telefone] || {
+                nome: 'Maria Silva',
+                etapa: 'qualificando',
+                historico: [
+                    {de: 'cliente', texto: 'Oi', hora: '14:30:05'},
+                    {de: 'robo', texto: 'Olá, essa é a Central de Atendimento...', hora: '14:30:08'},
+                    {de: 'cliente', texto: 'Ar condicionado', hora: '14:30:45'},
+                    {de: 'robo', texto: 'Perfeito! Atendemos toda a Zona Sul...', hora: '14:30:50'}
+                ]
+            };
+            
+            // Destacar item
+            document.querySelectorAll('.conversa-item').forEach(el => el.classList.remove('ativa'));
+            event.currentTarget.classList.add('ativa');
+            
+            // Mostrar info
+            document.getElementById('info-cliente').innerHTML = `
+                <strong style="color: #00d9ff; font-size: 16px;">${chat.nome || 'Cliente'}</strong><br>
+                <span style="color: #888;">${telefone}</span><br>
+                <span style="color: #888;">Etapa: ${chat.etapa}</span>
+                ${modoHumano[telefone] ? '<br><span style="color: #4caf50;">👤 VOCÊ ESTÁ CONTROLANDO</span>' : ''}
+            `;
+            
+            // Mostrar chat
+            const chatBox = document.getElementById('chat-box');
+            chatBox.innerHTML = '';
+            
+            chat.historico.forEach(msg => {
+                const div = document.createElement('div');
+                div.className = `msg msg-${msg.de === 'cliente' ? 'cliente' : 'robo'}`;
+                div.innerHTML = `
+                    <div style="font-size: 10px; color: #888; margin-bottom: 3px;">
+                        ${msg.de === 'cliente' ? '👤 Cliente' : '🤖 Robô'} ${msg.hora}
+                    </div>
+                    ${msg.texto}
+                `;
+                chatBox.appendChild(div);
+            });
+            
+            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            // Mostrar controles
+            document.getElementById('controles').style.display = 'grid';
+            
+            // Atualizar tempo
+            atualizarTempo();
+        }
+        
+        function atualizarStats() {
+            const total = Object.keys(conversas).length;
+            const esperando = Object.values(conversas).filter(c => c.esperando).length;
+            const humano = Object.keys(modoHumano).length;
+            
+            document.getElementById('total-conversas').textContent = total || 2;
+            document.getElementById('total-esperando').textContent = esperando || 1;
+            document.getElementById('total-humano').textContent = humano || 0;
+        }
+        
+        function atualizarTempo() {
+            if (!conversaSelecionada) return;
+            const agora = new Date();
+            document.getElementById('tempo-real').textContent = 
+                `⏱️ Agora: ${agora.toLocaleTimeString()} | Atualiza a cada 5 segundos`;
+        }
+        
+        // CONTROLES
+        
+        function assumirConversa() {
+            if (!conversaSelecionada) return alert('Selecione uma conversa primeiro');
+            
+            modoHumano[conversaSelecionada] = true;
+            
+            // AVISAR BACKEND QUE VOCÊ ASSUMIU
+            fetch('/api/pausar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    telefone: conversaSelecionada,
+                    pausar: true
+                })
+            });
+            
+            alert('👤 Você assumiu a conversa! O robô não vai mais responder.');
+            renderizarLista();
+            selecionar(conversaSelecionada);
+        }
+        
+        function pausarRobo() {
+            if (!conversaSelecionada) return;
+            
+            // Pausar temporariamente (5 minutos)
+            fetch('/api/pausar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    telefone: conversaSelecionada,
+                    pausar: true,
+                    tempo: 300 // segundos
+                })
+            });
+            
+            alert('⏸️ Robô pausado por 5 minutos');
+        }
+        
+        function enviarComoHumano() {
+            const msg = document.getElementById('msg-humano').value;
+            if (!msg || !conversaSelecionada) return;
+            
+            // ENVIAR PELO BACKEND
+            fetch('/api/enviar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    telefone: conversaSelecionada,
+                    mensagem: msg,
+                    origem: 'humano'
+                })
+            });
+            
+            // Adicionar ao chat visual
+            const chatBox = document.getElementById('chat-box');
+            const div = document.createElement('div');
+            div.className = 'msg msg-robo';
+            div.style.borderRightColor = '#4caf50';
+            div.innerHTML = `
+                <div style="font-size: 10px; color: #4caf50; margin-bottom: 3px;">
+                    👤 VOCÊ ${new Date().toLocaleTimeString()}
+                </div>
+                ${msg}
+            `;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            document.getElementById('msg-humano').value = '';
+        }
+        
+        // Atualizar a cada 5 segundos
+        setInterval(carregarConversas, 5000);
+        setInterval(atualizarTempo, 1000);
+        
+        // Primeira carga
+        carregarConversas();
+    </script>
 </body>
 </html>
